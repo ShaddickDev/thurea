@@ -122,6 +122,19 @@ pub fn parse_accounts(text: &str) -> Vec<(String, String)> {
 
 /// The QR code Android's "Pair device with QR code" scans: the pairing service's name and its
 /// password, in Wi-Fi QR syntax (what Android Studio shows).
+/// Another app that owns the phone or its profile, from `dpm list-owners`. Android writes it
+/// "User 0: admin=com.x/.Admin,DeviceOwner" (Android 14 and later) or "... Device Owner" (older).
+fn other_owner(owners: &str) -> Option<String> {
+    owners.lines().find_map(|l| {
+        let squashed: String = l.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_lowercase();
+        if l.contains(PKG) || !(squashed.contains("deviceowner") || squashed.contains("profileowner")) {
+            return None;
+        }
+        let admin = l.split("admin=").nth(1).unwrap_or(l).split([',', ' ', '/']).next().unwrap_or("").trim();
+        Some(if admin.is_empty() { l.trim().to_string() } else { admin.to_string() })
+    })
+}
+
 pub fn pairing_qr(name: &str, password: &str) -> String {
     format!("WIFI:T:ADB;S:{name};P:{password};;")
 }
@@ -160,7 +173,7 @@ fn run_inner(out: &Out, apk: Option<PathBuf>) -> Result<String, String> {
     let before: Vec<String> = devices(&adb);
     let name = format!("thurea-{}", random_text(6, b"abcdefghjkmnpqrstuvwxyz23456789"));
     let password = random_text(10, b"0123456789");
-    let qr = thurea_core::qr::QrCode::encode(pairing_qr(&name, &password).as_bytes(), thurea_core::qr::Ecc::Medium).ok_or("QR code too long")?;
+    let qr = thurea_core::qr::QrCode::encode(pairing_qr(&name, &password).as_bytes(), thurea_core::qr::Ecc::High).ok_or("QR code too long")?;
     if out.tray {
         for row in qr.to_matrix() {
             out.line(&["m", &row]);
@@ -217,8 +230,11 @@ fn run_inner(out: &Out, apk: Option<PathBuf>) -> Result<String, String> {
     }
     let owners = adb.sh("dpm list-owners");
     let already = owners.contains(PKG);
-    if !already && owners.contains("Device Owner") {
-        return Err(format!("Another app already manages this phone: {}", owners.lines().last().unwrap_or("")));
+    // Before anything is signed out: a phone another app manages can't take Thurea as its owner.
+    if !already {
+        if let Some(other) = other_owner(&owners) {
+            return Err(format!("Another app already manages this phone ({other}). Nothing was changed."));
+        }
     }
     let users = adb.sh("pm list users").matches("UserInfo{").count();
     if !already && users > 1 {
@@ -390,6 +406,17 @@ mod tests {
         assert_eq!(s.len(), 2);
         assert_eq!(s[1], ("thurea-abc234".into(), "_adb-tls-pairing._tcp".into(), "192.168.1.40:41235".into()));
         assert!(parse_mdns("List of discovered mdns services\n\n").is_empty());
+    }
+
+    #[test]
+    fn sees_another_owner_in_every_format() {
+        // A Samsung S24 Ultra on Android 17 (no space), and older Androids.
+        assert_eq!(other_owner("User 0: admin=com.example.guard/.AdminReceiver,DeviceOwner").as_deref(), Some("com.example.guard"));
+        assert_eq!(other_owner("User 0: admin=com.x.mdm/.Admin,Device Owner,Affiliated").as_deref(), Some("com.x.mdm"));
+        assert_eq!(other_owner("User 10: admin=com.work/.Admin,ProfileOwner").as_deref(), Some("com.work"));
+        assert_eq!(other_owner(&format!("User 0: admin={PKG}/.AdminReceiver,DeviceOwner")), None);
+        assert_eq!(other_owner("no owners have been set"), None);
+        assert_eq!(other_owner(""), None);
     }
 
     #[test]

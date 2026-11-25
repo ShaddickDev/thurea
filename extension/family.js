@@ -32,6 +32,19 @@ async function familyRefresh() {
   await chrome.storage.local.set({ familyChild: r && r.child ? r.child : null });
 }
 
+// The popup's tray actions (set up a phone, family, re-apply): handed to Thurea's helper, which
+// passes them to this computer's tray. thurea-tray answers with its page, opened here in a tab.
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (!msg || msg.type !== "thurea:open" || sender.id !== chrome.runtime.id) return;
+  if (!["main", "phone", "reset", "family", "reapply"].includes(msg.what)) return;
+  chrome.runtime.sendNativeMessage(FAMILY_HOST, { type: "open", what: msg.what }, r => {
+    if (chrome.runtime.lastError || !r) { reply({ ok: false, error: "Thurea isn't installed on this computer." }); return; }
+    if (r.ok && r.url && /^http:\/\/127\.0\.0\.1:\d+\//.test(r.url)) chrome.tabs.create({ url: r.url });
+    reply(r);
+  });
+  return true;   // replies later
+});
+
 chrome.runtime.onStartup.addListener(familyRefresh);
 chrome.runtime.onInstalled.addListener(familyRefresh);
 chrome.alarms.create("thurea-family", { periodInMinutes: 2 });

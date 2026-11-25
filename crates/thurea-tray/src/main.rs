@@ -222,6 +222,17 @@ fn serve() -> Result<Arc<App>, String> {
     getrandom::getrandom(&mut b).map_err(|e| e.to_string())?;
     let token: String = b.iter().map(|x| format!("{x:02x}")).collect();
     let app = Arc::new(App { base: format!("http://127.0.0.1:{port}/{token}/"), phone: Mutex::new(Phone::default()) });
+    // Where the browser extension's Thurea tab finds this page (`thurea family-host` reads it).
+    // In the user's runtime folder, readable by this user only.
+    #[cfg(unix)]
+    if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
+        use std::os::unix::fs::OpenOptionsExt;
+        let f = std::path::Path::new(&dir).join("thurea-tray.url");
+        let _ = std::fs::remove_file(&f);
+        if let Ok(mut out) = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&f) {
+            let _ = out.write_all(app.base.as_bytes());
+        }
+    }
     let a = app.clone();
     std::thread::spawn(move || {
         for c in l.incoming().flatten() {

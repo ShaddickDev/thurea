@@ -434,12 +434,14 @@ Panel {
     property bool shown: false
     // "reset": a new or factory-reset phone scans the Welcome-screen code (setup-phone).
     // "keep": a phone in use, nothing erased; it pairs by Wireless debugging (adopt-phone).
-    property string mode: "reset"
+    property string mode: "keep"
     property bool connected: false
     property bool done: false
     property bool withWifi: true
     property var rows: []
     property int size: 0
+    // The rows without their quiet zone, for the styled "keep" code.
+    property var code: []
     property string error: ""
     property string progress: ""
     property string wifiName: ""
@@ -459,11 +461,11 @@ Panel {
     function hide() {
       shown = false
       if (qrProc.running) { expectedStop = true; qrProc.running = false }
-      rows = []; size = 0; error = ""; progress = ""
+      rows = []; size = 0; code = []; error = ""; progress = ""
     }
     function start() {
       if (qrProc.running) { expectedStop = true; qrProc.running = false; Qt.callLater(start); return }
-      rows = []; pending = []; size = 0; error = ""; progress = strings.t("phone.preparing"); wifiName = ""
+      rows = []; pending = []; size = 0; code = []; error = ""; progress = strings.t("phone.preparing"); wifiName = ""
       connected = false; done = false
       expectedStop = false
       var cmd
@@ -479,7 +481,12 @@ Panel {
       var f = String(l).split("\t")
       if (f[0] === "m" && f.length > 1 && /^[01]+$/.test(f[1])) pending.push(f[1])
       else if (f[0] === "ready") {
-        if (pending.length > 0 && pending.length === pending[0].length) { rows = pending; size = pending.length }
+        if (pending.length > 0 && pending.length === pending[0].length) {
+          rows = pending; size = pending.length
+          var k = 0
+          while (k < pending.length / 2 && pending[k].indexOf("1") < 0) k++
+          code = pending.slice(k, pending.length - k).map(function(r) { return r.slice(k, r.length - k) })
+        }
         else error = strings.t("phone.badCode")
         household = f[3] === "household"
         wifiName = f[4] || ""
@@ -568,7 +575,7 @@ Panel {
               Layout.fillWidth: true
               spacing: Style.space(8)
               Repeater {
-                model: [{ id: "reset", label: strings.t("mode.reset") }, { id: "keep", label: strings.t("mode.keep") }]
+                model: [{ id: "keep", label: strings.t("mode.keep") }, { id: "reset", label: strings.t("mode.reset") }]
                 Button {
                   required property var modelData
                   Layout.fillWidth: true
@@ -582,28 +589,72 @@ Panel {
               }
             }
 
-            // ── The code: one native rectangle per module (crisp), as Omarchy's Wi-Fi QR does ──
+            // ── The code, dressed up: rounded modules on a white card, round-cornered finder eyes
+            //    in Thurea blue. The "Keep my phone" code also has the logo in a clear centre: it
+            //    has High error correction (30%) and the centre hides under 9% of it. The "Reset
+            //    phone" code is dense, so nothing covers it. Same drawing as the tray page
+            //    (qrStyled) and the Windows tray (QrArt). ──
             Rectangle {
-              id: qrCanvas
-              readonly property int moduleSize: phone.size > 0 ? Math.max(3, Math.floor(Style.space(260) / phone.size)) : 0
-              visible: phone.size > 0 && phone.error === "" && !phone.connected
-              width: phone.size * moduleSize
+              id: keepQr
+              readonly property int n: phone.code.length
+              readonly property int q: 3
+              // The logo only goes on a High-correction code. The code says its own level: the
+              // format bits beside the top-left eye (row 8, columns 0 and 1) read 00 only for High.
+              // (An older `thurea` made the pairing code with Medium, which the logo could break.)
+              readonly property bool logo: phone.mode === "keep" && n > 8 && phone.code[8].slice(0, 2) === "00"
+              readonly property real u: n > 0 ? Style.space(phone.mode === "keep" ? 280 : 320) / (n + 2 * q) : 0
+              readonly property int c: logo ? Math.round(n * 0.27) | 1 : 0
+              readonly property int c0: (n - c) / 2
+              function eye(x, y) { return (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7) }
+              visible: n > 0 && phone.error === "" && !phone.connected
+              width: (n + 2 * q) * u
               height: width
+              // A layout sizes an item by its preferred size, not its width: without these the
+              // card stayed small and a big code spilled out of it.
+              Layout.preferredWidth: width
+              Layout.preferredHeight: height
               color: "white"
-              radius: Style.cornerRadius
+              radius: u * 2.4
               Layout.alignment: Qt.AlignHCenter
-              Grid {
-                anchors.fill: parent
-                columns: phone.size
-                LayoutMirroring.enabled: false
-                Repeater {
-                  model: phone.size * phone.size
+              Repeater {
+                model: keepQr.n * keepQr.n
+                Rectangle {
+                  required property int index
+                  readonly property int mx: index % keepQr.n
+                  readonly property int my: Math.floor(index / keepQr.n)
+                  visible: (phone.code[my] || "").charAt(mx) === "1" && !keepQr.eye(mx, my)
+                    && !(mx >= keepQr.c0 && mx < keepQr.c0 + keepQr.c && my >= keepQr.c0 && my < keepQr.c0 + keepQr.c)
+                  x: (mx + keepQr.q + 0.06) * keepQr.u; y: (my + keepQr.q + 0.06) * keepQr.u
+                  width: keepQr.u * 0.88; height: width
+                  radius: keepQr.u * 0.3
+                  color: "#14171c"
+                  antialiasing: true
+                }
+              }
+              Repeater {
+                model: keepQr.n > 0 ? [[0, 0], [keepQr.n - 7, 0], [0, keepQr.n - 7]] : []
+                Rectangle {
+                  required property var modelData
+                  x: (modelData[0] + keepQr.q) * keepQr.u; y: (modelData[1] + keepQr.q) * keepQr.u
+                  width: keepQr.u * 7; height: width
+                  radius: keepQr.u * 2.1
+                  color: "transparent"
+                  border.width: keepQr.u
+                  border.color: "#1d4a94"
+                  antialiasing: true
                   Rectangle {
-                    required property int index
-                    width: qrCanvas.moduleSize; height: qrCanvas.moduleSize
-                    color: (phone.rows[Math.floor(index / phone.size)] || "").charAt(index % phone.size) === "1" ? "#111111" : "transparent"
+                    anchors.centerIn: parent
+                    width: keepQr.u * 3; height: width
+                    radius: keepQr.u * 0.9
+                    color: "#1d4a94"
+                    antialiasing: true
                   }
                 }
+              }
+              ThureaMark {
+                visible: keepQr.logo
+                width: (keepQr.c - 1.4) * keepQr.u; height: width
+                x: (keepQr.q + keepQr.c0 + 0.7) * keepQr.u; y: x
               }
             }
             CardText {

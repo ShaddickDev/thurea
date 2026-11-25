@@ -32,6 +32,8 @@
   #phone { text-align: center; }
   #qr { background: #fff; border-radius: 12px; padding: 0; display: inline-block; margin: 10px 0; }
   #qr svg { display: block; width: min(320px, 80vw); height: auto; }
+  #qr.styled { padding: 0; border-radius: 22px; box-shadow: 0 0 0 1px var(--line), 0 10px 30px rgba(0,0,0,.18); }
+  #qr.styled svg { width: min(300px, 76vw); }
   .muted { color: var(--muted); font-size: 13px; }
   .credits { color: var(--muted); font-size: 12px; margin-top: 26px; }
   /* The logo draws itself: outline 0–0.9s, fill 0.75–1.15s, check 1.05–1.4s. */
@@ -78,17 +80,17 @@
   <section class="card" id="phone" hidden>
     <div class="eyebrow">SET UP A PHONE WITH THUREA</div>
     <div class="row" style="justify-content:center;margin:12px 0">
-      <button id="mode-reset" class="primary">Reset phone</button>
-      <button id="mode-keep">Keep my phone</button>
+      <button id="mode-keep" class="primary">Keep my phone</button>
+      <button id="mode-reset">Reset phone</button>
     </div>
     <div id="qr"></div>
     <p class="muted" id="phone-progress"></p>
-    <ol id="steps-reset" style="text-align:left">
+    <ol id="steps-reset" style="text-align:left" hidden>
       <li>Start with a new phone, or factory-reset it (this erases it).</li>
       <li>On the first Welcome screen, tap the same spot 6 times. A scanner opens.</li>
       <li>Scan this code. The phone installs Thurea from this computer, and Thurea is in charge before the home screen appears.</li>
     </ol>
-    <ol id="steps-keep" style="text-align:left" hidden>
+    <ol id="steps-keep" style="text-align:left">
       <li>On the phone: Settings → About phone → tap Build number 7 times. (Or plug it in by USB with USB debugging on, and skip to step 3.)</li>
       <li>Settings → System → Developer options → Wireless debugging: on → Pair device with QR code.</li>
       <li>Scan this code. Thurea installs over Wi-Fi, signs your accounts out for a moment (Android needs that once), takes charge, then signs you back in.
@@ -137,10 +139,34 @@ function render(s) {
 }
 function refresh() { api("state").then(render).catch(() => {}); }
 
-function qrSvg(rows) {
-  const n = rows.length; let d = "";
-  rows.forEach((r, y) => { for (let x = 0; x < n; x++) if (r[x] === "1") d += `M${x},${y}h1v1h-1z`; });
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><rect width="${n}" height="${n}" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
+// Thurea's setup codes, dressed up: rounded modules on a white card, round-cornered finder eyes
+// in Thurea blue. The "Keep my phone" code also has the logo in a clear centre: it is made with
+// High error correction (30%) and the centre hides under 9% of it, so it still scans. The "Reset
+// phone" code is dense (Low correction), so nothing covers it. The same drawing is in the Omarchy
+// panel (Panel.qml) and the Windows tray (ThureaTray.cs QrArt).
+function qrStyled(rows, logo) {
+  let k = 0; while (k < rows.length / 2 && !rows[k].includes("1")) k++;    // the rows carry a quiet zone: trim it
+  rows = rows.slice(k, rows.length - k).map(r => r.slice(k, r.length - k));
+  const n = rows.length, q = 3, S = n + 2 * q;
+  const c = logo ? Math.round(n * 0.27) | 1 : 0, c0 = (n - c) / 2;
+  const eye = (x, y) => (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7);
+  const clear = (x, y) => x >= c0 && x < c0 + c && y >= c0 && y < c0 + c;
+  const rr = (x, y, w, h, r) => `M${x + r},${y}h${w - 2 * r}a${r},${r} 0 0 1 ${r},${r}v${h - 2 * r}a${r},${r} 0 0 1 -${r},${r}h-${w - 2 * r}a${r},${r} 0 0 1 -${r},-${r}v-${h - 2 * r}a${r},${r} 0 0 1 ${r},-${r}z`;
+  let dots = "", eyes = "";
+  rows.forEach((r, y) => { for (let x = 0; x < n; x++) if (r[x] === "1" && !eye(x, y) && !clear(x, y)) dots += rr(x + q + 0.06, y + q + 0.06, 0.88, 0.88, 0.3); });
+  for (const [x, y] of [[0, 0], [n - 7, 0], [0, n - 7]]) {
+    eyes += rr(x + q, y + q, 7, 7, 2.1) + rr(x + q + 1, y + q + 1, 5, 5, 1.3);
+    eyes += rr(x + q + 2, y + q + 2, 3, 3, 0.9);
+  }
+  const L = c - 1.4, lx = q + c0 + (c - L) / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${S} ${S}">
+    <rect width="${S}" height="${S}" rx="2.4" fill="#fff"/>
+    <path d="${dots}" fill="#14171c"/><path d="${eyes}" fill="#1d4a94" fill-rule="evenodd"/>
+    ${logo ? `<svg x="${lx}" y="${lx}" width="${L}" height="${L}" viewBox="26 26.5 56 56">
+      <defs><linearGradient id="qg" gradientUnits="userSpaceOnUse" x1="31" y1="27" x2="77" y2="82"><stop offset="0" stop-color="#A9D8FF"/><stop offset="1" stop-color="#4F86E0"/></linearGradient></defs>
+      <path d="M54,27 L77,35.5 V52 C77,66.5 67.5,76.5 54,82 C40.5,76.5 31,66.5 31,52 V35.5 Z" fill="url(#qg)"/>
+      <path d="M43.5,54.5 L51,62 L65,47" fill="none" stroke="#111318" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>` : ""}</svg>`;
 }
 const events = { downloading: d => `${d} is downloading Thurea…`, downloaded: () => "The phone has Thurea and is setting itself up.",
   retry: d => `The download broke off (${d}); the phone will retry.`, joined: d => `${d} joined the household. All done.`,
@@ -156,12 +182,12 @@ const events = { downloading: d => `${d} is downloading Thurea…`, downloaded: 
   signedin: d => `${d} is back.`, "signin-later": d => `${d} isn't back yet: add it later in Settings → Accounts.`,
   apps: d => `Open these apps once to sign back in: ${d}`,
   done: d => d === "updated" ? "Thurea was already in charge of this phone. It's updated." : "All done. Thurea is in charge, your accounts are back, and Wireless debugging is off again." };
-let mode = "reset";
+let mode = "keep";
 function pollPhone() {
   if (!phoneOn) return;
   api("phone").then(ph => {
     if (ph.error) { $("qr").textContent = ""; $("phone-progress").textContent = ph.error; }
-    else if (ph.rows && ph.rows.length && !$("qr").firstChild) $("qr").innerHTML = qrSvg(ph.rows);   // rows are 0/1 only (checked by the tray)
+    else if (ph.rows && ph.rows.length && !$("qr").firstChild) $("qr").innerHTML = qrStyled(ph.rows, mode === "keep");   // rows are 0/1 only (checked by the tray)
     if (ph.event && ["connected", "phone", "installing", "installed"].includes(ph.event[0])) $("qr").hidden = true;
     if (!ph.error) $("phone-progress").textContent = ph.event ? (events[ph.event[0]] || (() => ""))(ph.event[1] || "") : (ph.ready ? "Waiting for the phone… (same network as this computer)" : "Preparing the setup code…");
     $("phone-note").textContent = mode === "keep" ? "" : ph.ready ? (ph.household ? "This code holds your household key: don't photograph or share it."
@@ -169,7 +195,7 @@ function pollPhone() {
   }).catch(() => {}).finally(() => setTimeout(pollPhone, 1000));
 }
 function startPhone() {
-  phoneOn = true; $("phone").hidden = false; $("qr").textContent = ""; $("qr").hidden = false; $("phone-progress").textContent = "Preparing the setup code…";
+  phoneOn = true; $("phone").hidden = false; $("qr").textContent = ""; $("qr").hidden = false; $("qr").className = "styled"; $("phone-progress").textContent = "Preparing the setup code…";
   for (const m of ["reset", "keep"]) { $(`mode-${m}`).className = m === mode ? "primary" : ""; $(`steps-${m}`).hidden = m !== mode; }
   $("wifi-row").hidden = mode === "keep";
   api(`phone/start?wifi=${$("wifi").checked ? 1 : 0}&mode=${mode}`, { method: "POST" }).then(pollPhone);
@@ -197,7 +223,7 @@ $("reapply").onclick = () => { $("action").textContent = "Re-applying…"; api("
 for (const k of ["verses", "animation"]) $(`p-${k}`).onchange = e => api(`prefs?${k}=${e.target.checked ? "on" : "off"}`, { method: "POST" }).then(refresh);
 addEventListener("pagehide", () => { if (phoneOn) navigator.sendBeacon(`/${T}/api/phone/stop`); });
 if (location.hash === "#phone") startPhone();
-if (location.hash === "#keep") { mode = "keep"; startPhone(); }
+if (location.hash === "#reset") { mode = "reset"; startPhone(); }
 refresh(); setInterval(refresh, 30000);
 </script>
 </body>

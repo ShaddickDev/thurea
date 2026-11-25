@@ -2,6 +2,7 @@
 
 mod accounts;
 mod adopt;
+mod browser;
 mod config;
 mod daemon;
 mod control;

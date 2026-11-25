@@ -149,6 +149,85 @@ namespace Thurea
         }
     }
 
+    // ── Thurea's setup codes, dressed up: rounded modules on a white card, round-cornered finder
+    //    eyes in Thurea blue. The "Keep my phone" code also has the logo in a clear centre: it has
+    //    High error correction (30%) and the centre hides under 9% of it, so it still scans. The
+    //    "Reset phone" code is dense, so nothing covers it. Same drawing as the tray page
+    //    (qrStyled in page.html) and the Omarchy panel (keepQr in Panel.qml). ──
+
+    static class QrArt
+    {
+        static GraphicsPath Round(float x, float y, float w, float h, float r)
+        {
+            var p = new GraphicsPath();
+            float d = r * 2;
+            p.AddArc(x, y, d, d, 180, 90);
+            p.AddArc(x + w - d, y, d, d, 270, 90);
+            p.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+            p.AddArc(x, y + h - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
+        public static Bitmap Draw(QrCode qr, int u, Color outside, bool logo)
+        {
+            var rows = new List<string>();
+            for (int y = 0; y < qr.Size; y++)
+            {
+                var r = new StringBuilder(qr.Size);
+                for (int x = 0; x < qr.Size; x++) r.Append(qr.Get(x, y) ? '1' : '0');
+                rows.Add(r.ToString());
+            }
+            return Draw(rows, u, outside, logo);
+        }
+
+        // raw: the module rows (a quiet zone around them is trimmed off), as `thurea adopt-phone
+        // --tray` sends them; u: pixels per module; outside: the colour behind the card's corners.
+        public static Bitmap Draw(List<string> raw, int u, Color outside, bool logo)
+        {
+            int k = 0;
+            while (k < raw.Count / 2 && raw[k].IndexOf('1') < 0) k++;
+            int n = raw.Count - 2 * k, q = 3, size = (n + 2 * q) * u;
+            int c = logo ? (int)Math.Floor(n * 0.27 + 0.5) | 1 : 0, c0 = (n - c) / 2;
+            var bmp = new Bitmap(size, size);
+            using (var g = Graphics.FromImage(bmp))
+            using (var dark = new SolidBrush(Color.FromArgb(0x14, 0x17, 0x1C)))
+            using (var blue = new SolidBrush(Color.FromArgb(0x1D, 0x4A, 0x94)))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.Clear(outside);
+                using (var card = Round(0, 0, size, size, 2.4f * u)) g.FillPath(Brushes.White, card);
+                for (int y = 0; y < n; y++)
+                    for (int x = 0; x < n; x++)
+                    {
+                        if (raw[y + k][x + k] != '1') continue;
+                        bool eye = (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7);
+                        bool clear = x >= c0 && x < c0 + c && y >= c0 && y < c0 + c;
+                        if (eye || clear) continue;
+                        using (var m = Round((x + q + 0.06f) * u, (y + q + 0.06f) * u, 0.88f * u, 0.88f * u, 0.3f * u)) g.FillPath(dark, m);
+                    }
+                foreach (var at in new[] { new Point(0, 0), new Point(n - 7, 0), new Point(0, n - 7) })
+                {
+                    float ex = (at.X + q) * u, ey = (at.Y + q) * u;
+                    using (var ring = Round(ex, ey, 7 * u, 7 * u, 2.1f * u))
+                    using (var hole = Round(ex + u, ey + u, 5 * u, 5 * u, 1.3f * u))
+                    {
+                        ring.AddPath(hole, false);
+                        ring.FillMode = FillMode.Alternate;
+                        g.FillPath(blue, ring);
+                    }
+                    using (var dot = Round(ex + 2 * u, ey + 2 * u, 3 * u, 3 * u, 0.9f * u)) g.FillPath(blue, dot);
+                }
+                if (logo)
+                {
+                    float side = (c - 1.4f) * u, at0 = (q + c0 + 0.7f) * u;
+                    Logo.Draw(g, new RectangleF(at0, at0, side, side), 1f, false);
+                }
+            }
+            return bmp;
+        }
+    }
+
     // ── The logo: drawn here, and drawn a little at a time for the opening animation ──
 
     static class Logo
@@ -464,14 +543,14 @@ namespace Thurea
             catch (Exception e) { MessageBox.Show("Couldn't open the family control center: " + e.Message, "Thurea"); }
         }
 
-        public void ShowPhone() { ShowPhone(false); }
+        // "Keep my phone" (set up a phone in use, without a reset) is the first choice.
+        public void ShowPhone() { ShowPhone(true); }
 
-        // keep: "Keep my phone" (set up a phone in use, without a reset).
         public void ShowPhone(bool keep)
         {
             if (phone != null && !phone.IsDisposed) { if (keep) phone.SetMode(true); phone.Activate(); return; }
             phone = new PhoneForm();
-            if (keep) phone.SetMode(true);
+            phone.SetMode(keep);
             phone.Show();
         }
 
@@ -736,7 +815,7 @@ namespace Thurea
         const int Port = 47824;
         HttpListener listener;
         string token, url, apkSum;
-        readonly PictureBox pic = new PictureBox { SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
+        readonly PictureBox pic = new PictureBox { SizeMode = PictureBoxSizeMode.Zoom, BackColor = Theme.Bg };
         readonly Label progress = Theme.Label("", 9.5f, Theme.Muted);
         readonly TextBox ssid = new TextBox(), pass = new TextBox { UseSystemPasswordChar = true };
         readonly CheckBox withWifi;
@@ -744,9 +823,9 @@ namespace Thurea
         // Android's Wireless debugging QR (or USB) and does the setup; this window shows its progress.
         readonly List<Control> resetControls = new List<Control>();
         readonly Panel keepPanel = new Panel { BackColor = Color.Transparent };
-        readonly PictureBox keepPic = new PictureBox { SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
+        readonly PictureBox keepPic = new PictureBox { SizeMode = PictureBoxSizeMode.Zoom, BackColor = Theme.Bg };
         readonly Label keepProgress = Theme.Label("", 10f, Theme.Text, FontStyle.Bold);
-        readonly Button resetTab = Theme.Button("Reset phone", false), keepTab = Theme.Button("Keep my phone", false);
+        readonly Button keepTab = Theme.Button("Keep my phone", false), resetTab = Theme.Button("Reset phone", false);
         Process adopt;
         List<string> pendingRows = new List<string>();
 
@@ -787,30 +866,29 @@ namespace Thurea
             // Mode tabs: everything above belongs to "Reset phone" and moves down under them.
             foreach (Control c in Controls) if (c != logo && c != title) { c.Top += 50; resetControls.Add(c); }
             ClientSize = new Size(520, 850);
-            resetTab.Bounds = new Rectangle(40, 96, 214, 36);
-            keepTab.Bounds = new Rectangle(266, 96, 214, 36);
+            keepTab.Bounds = new Rectangle(40, 96, 214, 36);
+            resetTab.Bounds = new Rectangle(266, 96, 214, 36);
             resetTab.Click += delegate { SetMode(false); };
             keepTab.Click += delegate { SetMode(true); };
-            Controls.Add(resetTab); Controls.Add(keepTab);
+            Controls.Add(keepTab); Controls.Add(resetTab);
 
             keepPanel.Bounds = new Rectangle(0, 146, 520, 700);
-            keepPic.Bounds = new Rectangle(130, 0, 260, 260);
+            keepPic.Bounds = new Rectangle(115, 0, 290, 290);
             keepPanel.Controls.Add(keepPic);
-            keepProgress.TextAlign = ContentAlignment.TopCenter; keepProgress.Bounds = new Rectangle(24, 272, 472, 48);
+            keepProgress.TextAlign = ContentAlignment.TopCenter; keepProgress.Bounds = new Rectangle(24, 300, 472, 48);
             keepPanel.Controls.Add(keepProgress);
             var keepSteps = Theme.Label(
                 "1.  On the phone: Settings > About phone > tap Build number 7 times. (Or plug it in by USB with USB debugging on, and skip to 3.)\n\n"
               + "2.  Settings > System > Developer options > Wireless debugging: on > Pair device with QR code.\n\n"
               + "3.  Scan this code. Thurea installs over Wi-Fi, signs your accounts out for a moment (Android needs that once), takes charge of the phone, then signs you back in.", 10f, Theme.Text);
-            keepSteps.Bounds = new Rectangle(40, 326, 440, 190);
+            keepSteps.Bounds = new Rectangle(40, 354, 440, 190);
             keepPanel.Controls.Add(keepSteps);
             var keepNote = Theme.Label("Nothing on the phone is erased: apps, photos and settings stay. You enter passwords on the phone; Thurea never types or sees them. "
                 + "Needs Android's platform tools (adb) on this PC.", 8.5f, Theme.Muted);
-            keepNote.TextAlign = ContentAlignment.TopCenter; keepNote.Bounds = new Rectangle(24, 530, 472, 60);
+            keepNote.TextAlign = ContentAlignment.TopCenter; keepNote.Bounds = new Rectangle(24, 558, 472, 60);
             keepPanel.Controls.Add(keepNote);
             keepPanel.Visible = false;
             Controls.Add(keepPanel);
-            SetMode(false);
 
             Shown += delegate { if (Prefs.Get("animation")) logo.Play(); };
             Start();
@@ -868,13 +946,7 @@ namespace Thurea
                 int n = pendingRows.Count;
                 if (n > 0 && pendingRows[0].Length == n)
                 {
-                    var bmp = new Bitmap(n * 6, n * 6);
-                    using (var g = Graphics.FromImage(bmp))
-                    {
-                        g.Clear(Color.White);
-                        for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) if (pendingRows[y][x] == '1') g.FillRectangle(Brushes.Black, x * 6, y * 6, 6, 6);
-                    }
-                    var old = keepPic.Image; keepPic.Image = bmp; if (old != null) old.Dispose();
+                    var old = keepPic.Image; keepPic.Image = QrArt.Draw(pendingRows, 12, Theme.Bg, true); if (old != null) old.Dispose();
                 }
                 keepProgress.Text = "Waiting for the phone to scan (same Wi-Fi as this PC)";
                 return;
@@ -944,7 +1016,7 @@ namespace Thurea
             try
             {
                 var old = pic.Image;
-                pic.Image = QrCode.Encode(Encoding.UTF8.GetBytes(j.ToString())).ToBitmap(6);
+                pic.Image = QrArt.Draw(QrCode.Encode(Encoding.UTF8.GetBytes(j.ToString())), 6, Theme.Bg, false);
                 if (old != null) old.Dispose();
                 progress.Text = "Waiting for the phone... (it must be on the same network as this PC)";
             }

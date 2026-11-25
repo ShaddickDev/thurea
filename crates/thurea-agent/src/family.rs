@@ -410,12 +410,21 @@ pub fn host() -> Result<String, String> {
     use std::io::{Read, Write};
     let mut len = [0u8; 4];
     let mut stdin = std::io::stdin();
+    let mut msg = Value::Null;
     if stdin.read_exact(&mut len).is_ok() {
         let n = u32::from_le_bytes(len).min(64 * 1024) as usize;
-        let mut msg = vec![0u8; n];
-        let _ = stdin.read_exact(&mut msg);
+        let mut raw = vec![0u8; n];
+        if stdin.read_exact(&mut raw).is_ok() {
+            msg = serde_json::from_slice(&raw).unwrap_or(Value::Null);
+        }
     }
-    let reply = host_reply(&current_user()).to_string();
+    // {"type":"rules"} (or nothing): the family's rules for this account. Anything else is the
+    // extension's Thurea tab asking what the tray apps show, or for one of their actions.
+    let reply = match msg["type"].as_str() {
+        None | Some("rules") => host_reply(&current_user()),
+        Some(_) => crate::browser::reply(&msg),
+    }
+    .to_string();
     let mut out = std::io::stdout();
     let _ = out.write_all(&(reply.len() as u32).to_le_bytes());
     let _ = out.write_all(reply.as_bytes());
