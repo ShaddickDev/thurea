@@ -1,0 +1,32 @@
+/* Pornhub / YouPorn / Redtube / Tube8 ads, hidden before the page paints.
+   Pre/post-rolls are blocked in rules.json (/_xa/ads). Ad boxes use random
+   class names that change, so they're matched by what they contain.
+   Switched off when Thurea is paused on the site. */
+
+/* Every wrapper around a TrafficJunky slot, up to (not including) the first
+   one that also holds real page content: links within the site, the player,
+   menus or forms. Removes the whole box instead of leaving black space. */
+html:not([data-thurea-off]) :is(div, li, aside, section, span):is(:has(ins.adsbytrafficjunky), :has(iframe[src*="trafficjunky"])):not(:has(:is(a[href^="/"]:not([href^="//"]), video, form, ul, nav, input, #player, .mainPlayerDiv, #videoWrapper))),
+
+html:not([data-thurea-off]) :is(
+  /* TrafficJunky ads drawn as CSS images in random-named boxes: every one carries
+     TJ's "Ad" in-banner label, so hide whatever holds that label */
+  :has(> [id^="tj-inbanlabel-container"]), :has(> .t-j-inbanlabel-container),
+  :has(> div > [id^="tj-inbanlabel-container"]):not(:has(a[href^="/"]:not([href^="//"]), video, form, nav)),
+  /* the ad slots themselves */
+  ins.adsbytrafficjunky, ins#popsByTrafficJunky, .adsbytrafficjunkycontext,
+  iframe[src*="trafficjunky"],
+  /* ad tiles mixed into video grids */
+  li.js_promoItem, li.tjListItem, li.js-nativeTjVideoGrid, li:has(> div > div > ins.adsbytrafficjunky),
+  /* "Remove Ads" buttons that sit on every ad box (and on the player's preroll) */
+  .adsRemoveButtonWrapper, .js-phpAdsRemoveButton,
+  /* paid links dressed as menu items / upgrade buttons */
+  li:has(> a[href*="trafficjunky"]), li:has(> a[href*="guppy.link"]), a[href*="ads.trafficjunky"],
+  .customUpgradeBtn, #headerUpgradePremiumBtn, .uploadBtnContentSpicevids,
+  /* "Some features may not be available… select Accept All" nag after choosing essential-only */
+  #cookie_consent_min_wrapper,
+  /* YouPorn pause-roll banner over the video */
+  #pb_template, #pb_content, .pb_iframe, #pb_tj_logo
+) {
+  display: none !important;
+}

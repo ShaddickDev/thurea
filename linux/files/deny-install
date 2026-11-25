@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Thurea: this browser can get around Thurea's blocker, so it can't be installed." >&2
+exit 1

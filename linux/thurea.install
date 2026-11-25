@@ -1,0 +1,8 @@
+post_install() {
+  systemctl daemon-reload
+  systemctl enable --now thurea.timer thurea.path thurea-extensions.service thurea-update.timer >/dev/null 2>&1
+  /usr/lib/thurea/thurea-apply
+  # Omarchy first: Thurea appears in the bar of every Omarchy user straight away.
+  /usr/lib/thurea/thurea-omarchy install-all >/dev/null 2>&1 || true
+}
+post_upgrade() { post_install; systemctl restart thurea-extensions.service; }

@@ -1,0 +1,15 @@
+[Unit]
+Description=Thurea: serves Thurea's updates to browsers on this computer (127.0.0.1 only)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I -m http.server 8137 --bind 127.0.0.1 --directory /usr/share/thurea/web
+DynamicUser=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- support-transfer-ownership: a phone's current device owner can hand the phone over to Thurea
+     (DevicePolicyManager.transferOwnership), so it switches without a factory reset. -->
+<device-admin>
+  <uses-policies/>
+  <support-transfer-ownership/>
+</device-admin>

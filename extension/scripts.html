@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Thurea – Userscripts</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font: 14px system-ui, sans-serif; background: #16181d; color: #eee; margin: 0; padding: 24px; }
+  main { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  a { color: #6ea8fe; }
+  button { padding: 8px 12px; border: 0; border-radius: 6px; background: #2b2f38; color: #eee; cursor: pointer; font: inherit; }
+  button:hover { background: #3a3f4b; }
+  button.primary { background: #c0392b; }
+  button.primary:hover { background: #e04a3a; }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=url] { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #333; background: #1f2229; color: #eee; font: inherit; }
+  textarea { width: 100%; min-height: 420px; padding: 10px; border-radius: 6px; border: 1px solid #333; background: #0f1115; color: #ddd; font: 13px/1.45 ui-monospace, monospace; tab-size: 2; }
+  .bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .card { background: #1f2229; border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+  .banner { background: #4a3510; border: 1px solid #8a6417; }
+  .banner ol { margin: 8px 0 12px; padding-left: 20px; }
+  .script { display: flex; gap: 14px; align-items: flex-start; }
+  .script .info { flex: 1; min-width: 0; }
+  .script .name { font-weight: 600; }
+  .script .ver { color: #888; font-weight: 400; margin-left: 6px; }
+  .muted { color: #999; font-size: 12px; }
+  .sites { color: #888; font-size: 12px; margin-top: 4px; word-break: break-all; }
+  .err { color: #ff8a80; font-size: 12px; margin-top: 4px; }
+  .ok { color: #81c995; font-size: 12px; margin-top: 4px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .toggles { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #aaa; min-width: 120px; }
+  .toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .empty { color: #888; padding: 20px 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🛡️ Thurea – Userscripts</h1>
+
+  <div class="card banner" id="banner" hidden>
+    <b>Userscripts are switched off in Chromium.</b>
+    <ol>
+      <li>Click the button below to open Thurea's details page.</li>
+      <li>Turn on <b>Allow User Scripts</b>.</li>
+      <li>Come back here. This message disappears once it's on.</li>
+    </ol>
+    <button class="primary" id="openSettings">Open Thurea's settings</button>
+  </div>
+
+  <!-- Script list -->
+  <section id="listView">
+    <div class="bar">
+      <button class="primary" id="new">+ New script</button>
+      <input type="url" id="installUrl" placeholder="Install from URL (…/script.user.js)">
+      <button id="installGo">Install</button>
+      <button id="updateAll">Check for updates</button>
+    </div>
+    <div id="status" class="muted"></div>
+    <div id="list"></div>
+    <p class="muted">Tip: opening any <code>.user.js</code> link (for example on Greasy Fork) brings you straight to Thurea's install page.</p>
+  </section>
+
+  <!-- Editor -->
+  <section id="editView" hidden>
+    <div class="card">
+      <h2 id="editTitle">New script</h2>
+      <textarea id="code" spellcheck="false"></textarea>
+      <div id="editErr" class="err"></div>
+      <div class="bar" style="margin: 10px 0 0">
+        <button class="primary" id="save">Save</button>
+        <button id="cancel">Cancel</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install confirmation -->
+  <section id="installView" hidden>
+    <div class="card">
+      <h2 id="insName">Install userscript</h2>
+      <div class="muted" id="insFrom"></div>
+      <p id="insDesc"></p>
+      <div class="sites" id="insSites"></div>
+      <div class="sites" id="insGrants"></div>
+      <div class="err" id="insErr"></div>
+      <div class="bar" style="margin: 12px 0">
+        <button class="primary" id="insConfirm" disabled>Install</button>
+        <button id="insCancel">Cancel</button>
+      </div>
+      <p class="muted">Only install scripts from sources you trust. A userscript can read and change everything on the sites it runs on.</p>
+      <textarea id="insCode" readonly spellcheck="false"></textarea>
+    </div>
+  </section>
+</main>
+<script src="userscripts-lib.js"></script>
+<script src="scripts.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "type": "object",
+  "properties": {
+    "pornBlock": { "title": "Site blocker (managed)", "description": "Set by Thurea on this computer.", "type": "boolean" }
+  }
+}

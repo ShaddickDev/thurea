@@ -1,0 +1,185 @@
+#!/bin/bash
+# Builds a complete Thurea release: every platform from this repo, all with one version number.
+#
+#   release/build.sh [VERSION]       (default: release/VERSION)
+#
+# dist/ then holds the release (the asset names never change, so devices can always fetch
+# releases/latest/download/<name>):
+#   thurea-extension.crx       the Thurea browser extension (also inside every desktop package)
+#   thurea-linux.pkg.tar.zst   Thurea for Linux (Arch / Omarchy pacman package)
+#   thurea-windows.zip         Thurea for Windows (Thurea\Install Thurea.cmd)
+#   thurea-android.apk         Thurea for Android
+#   thurea-manifest.json       version + SHA-256 of each file
+#   thurea-manifest.json.sig   RSA-SHA256 signature of the manifest with the release key
+# Every installed Thurea accepts an update only if the manifest's signature checks out against the
+# public key it shipped with (release/release-key.pub.pem) and the file matches its checksum.
+#
+# Keys (never in the repo): ~/.config/thurea/release-key.pem (release signing),
+# ~/.config/thurea/extension-key.pem (extension ID), the Android keystore (android/build.sh).
+set -euo pipefail
+R=$(cd "$(dirname "$0")/.." && pwd)
+VER=${1:-$(cat "$R/release/VERSION")}
+[[ $VER =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must be like 1.0.0"; exit 1; }
+KEYDIR=${THUREA_KEYS:-$HOME/.config/thurea}
+RELKEY=$KEYDIR/release-key.pem
+EXTKEY=$KEYDIR/extension-key.pem
+for k in "$RELKEY" "$EXTKEY"; do [ -f "$k" ] || { echo "missing key: $k"; exit 1; }; done
+openssl pkey -in "$RELKEY" -pubout | cmp -s - "$R/release/release-key.pub.pem" || { echo "release key doesn't match release/release-key.pub.pem"; exit 1; }
+B=$R/build/release; D=$R/dist
+rm -rf "$B" "$D"; mkdir -p "$B/common" "$B/ext" "$D"
+C=$B/common
+echo "== Thurea $VER"
+echo "$VER" > "$R/release/VERSION"
+echo "$VER" > "$C/VERSION"
+# One version everywhere: the Rust crates (`thurea version`) and the Omarchy plugin too.
+sed -i -E "0,/^version = \"[0-9.]+\"/s//version = \"$VER\"/" "$R/Cargo.toml"
+python3 - "$R/linux/omarchy-plugin/thurea/manifest.json" "$VER" <<'PY'
+import json, sys
+p, v = sys.argv[1], sys.argv[2]
+m = json.load(open(p)); m["version"] = v
+json.dump(m, open(p, "w"), indent=2); open(p, "a").write("\n")
+PY
+cp "$R/CREDITS.md" "$C/CREDITS.md"
+
+# ---- Extension ----
+( cd "$R/extension" && tar --exclude='host' --exclude='README.md' --exclude='bump-sw.sh' -cf - . ) | tar -xf - -C "$B/ext"
+cp "$R/CREDITS.md" "$B/ext/CREDITS.md"
+python3 - "$B/ext/manifest.json" "$VER" <<'PY'
+import json, sys
+p, v = sys.argv[1], sys.argv[2]
+m = json.load(open(p)); m["version"] = v; m.pop("update_url", None)
+m["update_url"] = "http://127.0.0.1:8137/updates.xml"
+json.dump(m, open(p, "w"), indent=2, ensure_ascii=False)
+PY
+CHROMIUM=$(command -v chromium || echo /usr/lib/chromium/chromium)
+"$CHROMIUM" --no-sandbox --headless=new --user-data-dir="$B/packprofile" --pack-extension="$B/ext" --pack-extension-key="$EXTKEY" >/dev/null 2>&1 || true
+[ -s "$B/ext.crx" ] || { echo "packing the extension failed"; exit 1; }
+cp "$B/ext.crx" "$C/thurea.crx"
+# Extension ID from the key (Chromium: first 128 bits of SHA-256 of the public key, as a-p).
+ID=$(openssl pkey -in "$EXTKEY" -pubout -outform DER 2>/dev/null | sha256sum | head -c 32 | tr '0-9a-f' 'a-p')
+echo "$ID" > "$C/extension-id"
+cat > "$C/updates.xml" <<XML
+<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='$ID'>
+    <updatecheck codebase='http://127.0.0.1:8137/thurea.crx' version='$VER' />
+  </app>
+</gupdate>
+XML
+echo "   extension $ID"
+
+# ---- Shared block lists and policies ----
+{ echo "# >>> thurea (Thurea blocker - managed by the system, do not edit)"
+  awk '{print "0.0.0.0 " $1; if (split($1, p, ".") == 2) print "0.0.0.0 www." $1}' "$R/extension/filters/porn-domains.txt"
+  for d in dns.google dns64.dns.google cloudflare-dns.com mozilla.cloudflare-dns.com chrome.cloudflare-dns.com \
+           one.one.one.one 1dot1dot1dot1.cloudflare-dns.com security.cloudflare-dns.com dns.quad9.net dns9.quad9.net \
+           dns10.quad9.net dns11.quad9.net dns12.quad9.net doh.opendns.com dns.opendns.com dns.adguard-dns.com \
+           unfiltered.adguard-dns.com dns.adguard.com dns-unfiltered.adguard.com dns.nextdns.io doh.mullvad.net \
+           dns.mullvad.net base.dns.mullvad.net adblock.dns.mullvad.net all.dns.mullvad.net dns.controld.com \
+           freedns.controld.com doh.dns.sb dns.alidns.com doh.pub dns.twnic.tw common.dot.dns.yandex.net \
+           doh.libredns.gr dns.switch.ch doh.ffmuc.net dns.digitale-gesellschaft.ch protective.joindns4.eu unfiltered.joindns4.eu; do
+    echo "0.0.0.0 $d"; done
+  echo "# <<< thurea"; } > "$C/hosts-block"
+python3 - "$ID" "$C" "$R/extension/filters/porn-domains.txt" "$R/release/release-key.pub.pem" <<'PY'
+import base64, json, subprocess, sys
+ID, out, lst, pub = sys.argv[1:5]
+pol = {
+  "ExtensionInstallForcelist": [f"{ID};http://127.0.0.1:8137/updates.xml"],
+  "ExtensionSettings": {
+    ID: {"installation_mode": "force_installed", "update_url": "http://127.0.0.1:8137/updates.xml", "override_update_url": True},
+    "cackkknkjnchcemedibohdnlejfgdben": {"installation_mode": "removed"},
+    "jinjaccalgkegednnccohejagnlnfdag": {"installation_mode": "removed"}
+  },
+  "3rdparty": {"extensions": {ID: {"pornBlock": True}}},
+  "ForceGoogleSafeSearch": True,
+  "DnsOverHttpsMode": "secure",
+  "DnsOverHttpsTemplates": "https://family.cloudflare-dns.com/dns-query",
+  "IncognitoModeAvailability": 1,
+  "BrowserGuestModeEnabled": False
+}
+json.dump(pol, open(f"{out}/chromium-policy.json", "w"), indent=2)
+known = [l.strip() for l in open(lst) if l.strip()]
+top = [d for d in known if d.count(".") == 1][:3000]
+json.dump({"policies": {
+  "DNSOverHTTPS": {"Enabled": True, "ProviderURL": "https://family.cloudflare-dns.com/dns-query", "Locked": True, "Fallback": False},
+  "DisablePrivateBrowsing": True,
+  "WebsiteFilter": {"Block": [f"*://*.{d}/*" for d in top] + [f"*://{d}/*" for d in top]}
+}}, open(f"{out}/firefox-policies.json", "w"))
+# Release public key: PEM (Linux, openssl), modulus/exponent (Windows), SPKI (Android).
+import shutil; shutil.copy(pub, f"{out}/release-key.pub.pem")
+txt = subprocess.run(["openssl", "rsa", "-pubin", "-in", pub, "-noout", "-text"], capture_output=True, text=True, check=True).stdout
+mod = "".join(l.strip() for l in txt.split("Modulus:")[1].split("Exponent:")[0].splitlines()).replace(":", "")
+n = bytes.fromhex(mod).lstrip(b"\0")
+e = int(txt.split("Exponent:")[1].split()[0])
+json.dump({"n": base64.b64encode(n).decode(), "e": base64.b64encode(e.to_bytes((e.bit_length() + 7) // 8, "big")).decode()}, open(f"{out}/release-key.json", "w"))
+der = subprocess.run(["openssl", "pkey", "-pubin", "-in", pub, "-outform", "DER"], capture_output=True, check=True).stdout
+open(f"{out}/release-key.spki.b64", "w").write(base64.b64encode(der).decode())
+PY
+cp "$C/thurea.crx" "$D/thurea-extension.crx"
+
+# ---- Android ----
+CODE=$(awk -F. '{print $1*10000 + $2*100 + $3}' <<< "$VER")
+sed -i -E "s/android:versionCode=\"[0-9]+\"/android:versionCode=\"$CODE\"/; s/android:versionName=\"[^\"]+\"/android:versionName=\"$VER\"/" "$R/android/AndroidManifest.xml"
+cat > "$R/android/src/com/thurea/guard/ReleaseKey.java" <<JAVA
+package com.thurea.guard;
+
+/** Thurea's release public key (written by release/build.sh from release/release-key.pub.pem). */
+final class ReleaseKey {
+    static final String SPKI = "$(cat "$C/release-key.spki.b64")";
+}
+JAVA
+echo "== Android ($VER, code $CODE)"
+"$R/android/build.sh" > "$B/android.log" 2>&1 || { tail -20 "$B/android.log"; echo "Android build failed"; exit 1; }
+cp "$R/android/Thurea.apk" "$D/thurea-android.apk"
+
+# ---- Linux ----
+echo "== Linux"
+# Thurea's Rust agent (phone setup by QR, verse of the day, status) and the non-Omarchy tray.
+( cd "$R" && cargo build --release -p thurea-agent -p thurea-tray ) > "$B/rust.log" 2>&1 || { tail -20 "$B/rust.log"; echo "Rust build failed"; exit 1; }
+( cd "$R" && cargo test --release -p thurea-core -p thurea-agent -p thurea-tray ) >> "$B/rust.log" 2>&1 || { tail -30 "$B/rust.log"; echo "Rust tests failed"; exit 1; }
+cp "$R/target/release/thurea" "$R/target/release/thurea-tray" "$C/"
+cp "$D/thurea-android.apk" "$C/Thurea.apk"
+rm -rf "$B/linux"; cp -r "$R/linux" "$B/linux"
+sed -i "s/^pkgver=.*/pkgver=$VER/" "$B/linux/PKGBUILD" "$R/linux/PKGBUILD"
+( cd "$B/linux" && THUREA_DATA=$C PKGDEST=$B/linux makepkg -f --nodeps >/dev/null 2>"$B/linux.log" ) || { cat "$B/linux.log"; exit 1; }
+cp "$B"/linux/thurea-"$VER"-*.pkg.tar.zst "$D/thurea-linux.pkg.tar.zst"
+
+# ---- Windows ----
+echo "== Windows"
+W=$B/windows/Thurea; mkdir -p "$W/data" "$W/web" "$W/android"
+cp -r "$R/windows/thurea/." "$W/"
+cp "$C/extension-id" "$C/chromium-policy.json" "$C/firefox-policies.json" "$C/release-key.json" "$W/data/"
+cp "$R/policy/verses.json" "$W/data/verses.json"
+# The Rust agent for Windows: the tray runs it for "Keep my phone" (setup without a reset).
+( cd "$R" && PATH="$HOME/.cargo/bin:$PATH" cargo build --release -p thurea-agent --target x86_64-pc-windows-gnu ) >> "$B/rust.log" 2>&1 || { tail -20 "$B/rust.log"; echo "Windows agent build failed"; exit 1; }
+cp "$R/target/x86_64-pc-windows-gnu/release/thurea.exe" "$W/thurea.exe"
+cp "$R/CREDITS.md" "$W/CREDITS.md"
+cp "$C/thurea.crx" "$C/updates.xml" "$W/web/"
+cp "$D/thurea-android.apk" "$W/android/Thurea.apk"
+echo "$VER" > "$W/VERSION"
+find "$W" \( -name "*.ps1" -o -name "*.cs" -o -name "*.cmd" -o -name "*.md" \) -print0 | xargs -0 sed -i "s/\r\?$/\r/"
+( cd "$B/windows" && python3 - <<'PY'
+import os, zipfile
+with zipfile.ZipFile("../../../dist/thurea-windows.zip", "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _, files in os.walk("Thurea"):
+        for f in sorted(files):
+            z.write(os.path.join(root, f))
+PY
+)
+
+# ---- Manifest, signed ----
+python3 - "$D" "$VER" <<'PY'
+import hashlib, json, os, sys, time
+d, v = sys.argv[1], sys.argv[2]
+files = {}
+for key, name in [("extension", "thurea-extension.crx"), ("linux", "thurea-linux.pkg.tar.zst"),
+                  ("windows", "thurea-windows.zip"), ("android", "thurea-android.apk")]:
+    data = open(os.path.join(d, name), "rb").read()
+    files[key] = {"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+json.dump({"name": "Thurea", "version": v, "released": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "files": files},
+          open(os.path.join(d, "thurea-manifest.json"), "w"), indent=2)
+PY
+openssl dgst -sha256 -sign "$RELKEY" -out "$D/thurea-manifest.json.sig" "$D/thurea-manifest.json"
+openssl dgst -sha256 -verify "$R/release/release-key.pub.pem" -signature "$D/thurea-manifest.json.sig" "$D/thurea-manifest.json" >/dev/null
+echo "== dist/ (Thurea $VER, manifest signed)"
+ls -l "$D"

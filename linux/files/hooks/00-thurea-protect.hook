@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Remove
+Type = Package
+Target = thurea
+
+[Action]
+Description = Thurea cannot be removed
+When = PreTransaction
+Exec = /usr/lib/thurea/deny-remove
+AbortOnFail

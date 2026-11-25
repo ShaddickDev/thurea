@@ -1,0 +1,63 @@
+#!/bin/bash
+# Thurea on Omarchy: the Thurea bar plugin (status, verse of the day, phone setup by QR) for
+# every Omarchy user on this computer. Run by the package (and thurea-apply, so new users and
+# reinstalled Omarchy get it too).
+#
+#   thurea-omarchy install-all    as root: every user with Omarchy (once per user)
+#   thurea-omarchy install        as a user: just me (adds Thurea to the bar again if I removed it)
+#
+# The plugin lives in /usr/share/thurea/omarchy-plugin (updated with Thurea); each user gets a
+# link to it in ~/.config/omarchy/plugins/thurea.omarchy, as Omarchy expects third-party plugins.
+# Thurea is put in the bar once; if the user removes it from the bar later, that's respected.
+set -u
+SRC=/usr/share/thurea/omarchy-plugin
+ID=thurea.omarchy
+
+# Put Thurea in the bar: through the running Omarchy shell if there is one, else in shell.json.
+enable_in_bar() {   # as the user
+  if command -v omarchy-shell >/dev/null && omarchy-shell shell rescanPlugins >/dev/null 2>&1; then
+    sleep 1
+    omarchy-shell shell enablePlugin "$ID" '{"section":"right","index":0}' >/dev/null 2>&1 && return 0
+  fi
+  local f=$HOME/.config/omarchy/shell.json
+  [ -f "$f" ] || return 1          # no user shell.json yet: Omarchy's defaults; the next run (from the shell) adds it
+  command -v jq >/dev/null || return 1
+  jq -e --arg id "$ID" '[.. | objects | select(.id? == $id)] | length > 0' "$f" >/dev/null 2>&1 && return 0
+  # No right section of its own: the user is on Omarchy's default layout, which only the
+  # running shell can extend without dropping the defaults. Leave it for the next run.
+  jq -e '.bar.layout.right | type == "array"' "$f" >/dev/null 2>&1 || return 1
+  local tmp; tmp=$(mktemp "$f.thurea.XXXXXX") || return 1
+  if jq --arg id "$ID" '.bar.layout.right = ([{id: $id}] + (.bar.layout.right // []))' "$f" > "$tmp"; then
+    mv -f "$tmp" "$f"
+  else
+    rm -f "$tmp"; return 1
+  fi
+}
+
+install_me() {   # as the user
+  [ -d "$HOME/.config/omarchy" ] || return 0      # not an Omarchy user
+  [ -f "$SRC/manifest.json" ] || return 1
+  mkdir -p "$HOME/.config/omarchy/plugins" "$HOME/.config/thurea"
+  local link=$HOME/.config/omarchy/plugins/$ID
+  [ "$(readlink "$link" 2>/dev/null)" = "$SRC" ] || { rm -rf "$link"; ln -s "$SRC" "$link"; }
+  local mark=$HOME/.config/thurea/.omarchy-bar
+  if [ "${1:-}" = force ] || [ ! -e "$mark" ]; then
+    enable_in_bar && touch "$mark"
+  fi
+  return 0
+}
+
+case "${1:-install}" in
+  install) install_me force ;;
+  install-all)
+    [ "$(id -u)" = 0 ] || { echo "install-all must run as root" >&2; exit 1; }
+    while IFS=: read -r user _ uid _ _ home _; do
+      [ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ] && [ -d "$home/.config/omarchy" ] || continue
+      [ -e "$home/.config/thurea/.omarchy-bar" ] && [ -L "$home/.config/omarchy/plugins/$ID" ] && continue
+      runuser -u "$user" -- env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" \
+        PATH="/usr/share/omarchy/bin:/usr/local/bin:/usr/bin" bash "$0" install-user || true
+    done < /etc/passwd
+    ;;
+  install-user) install_me ;;
+  *) echo "usage: thurea-omarchy install | install-all" >&2; exit 2 ;;
+esac

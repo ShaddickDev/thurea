@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt">
+  <aapt:attr name="android:drawable">
+    <vector android:width="160dp" android:height="160dp" android:viewportWidth="108" android:viewportHeight="108">
+      <group android:translateX="-27" android:translateY="-27" android:scaleX="1.5" android:scaleY="1.5" android:pivotX="0" android:pivotY="0">
+        <path android:name="fill" android:pathData="M54,27 L77,35.5 V52 C77,66.5 67.5,76.5 54,82 C40.5,76.5 31,66.5 31,52 V35.5 Z" android:fillAlpha="0">
+          <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="31" android:startY="27" android:endX="77" android:endY="82"
+                android:startColor="#A9D8FF" android:endColor="#4F86E0"/>
+          </aapt:attr>
+        </path>
+        <path android:name="outline" android:pathData="M54,27 L77,35.5 V52 C77,66.5 67.5,76.5 54,82 C40.5,76.5 31,66.5 31,52 V35.5 Z" android:strokeColor="#8CC8FF" android:strokeWidth="2.2"
+            android:strokeLineJoin="round" android:strokeLineCap="round" android:trimPathEnd="0"/>
+        <path android:name="check" android:pathData="M43.5,54.5 L51,62 L65,47" android:strokeColor="#111318" android:strokeWidth="5"
+            android:strokeLineCap="round" android:strokeLineJoin="round" android:trimPathEnd="0"/>
+      </group>
+    </vector>
+  </aapt:attr>
+  <target android:name="outline">
+    <aapt:attr name="android:animation">
+      <objectAnimator android:propertyName="trimPathEnd" android:valueFrom="0" android:valueTo="1"
+          android:duration="900" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+    </aapt:attr>
+  </target>
+  <target android:name="fill">
+    <aapt:attr name="android:animation">
+      <objectAnimator android:propertyName="fillAlpha" android:valueFrom="0" android:valueTo="1"
+          android:startOffset="750" android:duration="400" android:interpolator="@android:interpolator/linear_out_slow_in"/>
+    </aapt:attr>
+  </target>
+  <target android:name="check">
+    <aapt:attr name="android:animation">
+      <objectAnimator android:propertyName="trimPathEnd" android:valueFrom="0" android:valueTo="1"
+          android:startOffset="1050" android:duration="350" android:interpolator="@android:interpolator/fast_out_slow_in"/>
+    </aapt:attr>
+  </target>
+</animated-vector>

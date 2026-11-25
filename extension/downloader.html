@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Thurea Downloader</title>
+<style>
+  body { font: 14px system-ui, sans-serif; background: #16181d; color: #eee; max-width: 640px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 20px; }
+  .title { color: #aaa; margin-bottom: 20px; word-break: break-word; }
+  .variant { display: flex; justify-content: space-between; align-items: center; background: #1f2229; padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; }
+  .variant b { font-size: 16px; }
+  .variant span { color: #999; margin-left: 10px; font-size: 12px; }
+  button { padding: 9px 16px; border: 0; border-radius: 6px; background: #c0392b; color: #fff; cursor: pointer; font-size: 14px; }
+  button:disabled { background: #555; cursor: default; }
+  .bar { height: 10px; background: #2b2f38; border-radius: 5px; overflow: hidden; margin: 18px 0 8px; }
+  .bar div { height: 100%; width: 0; background: linear-gradient(90deg, #c0392b, #e67e22); transition: width .2s; }
+  #status { color: #bbb; font-size: 13px; min-height: 18px; }
+  .err { color: #ff7b6b; }
+  .hint { color: #777; font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+  <h1>⬇ Thurea Downloader</h1>
+  <div class="title" id="title"></div>
+  <div id="variants">Reading stream…</div>
+  <div class="bar"><div id="bar"></div></div>
+  <div id="status"></div>
+  <div class="hint">Keep this tab open until the download finishes. Streams are converted to MP4 automatically, with no quality loss.</div>
+  <script src="lib/mux.min.js"></script>
+  <script src="downloader.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+[Unit]
+Description=Thurea: keep the blocker in place
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/thurea/thurea-apply

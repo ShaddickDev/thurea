@@ -1,0 +1,410 @@
+{
+  "manifest_version": 3,
+  "name": "Thurea \u2013 Ad Blocker & Video Downloader",
+  "version": "2.4.7",
+  "description": "Blocks ads and trackers (including YouTube), pop-unders, redirects, click-hijacks and cookie banners; downloads videos; skips YouTube sponsors; runs userscripts. Includes Omarchy's Copy URL, Download Video and WhatsApp Slim.",
+  "permissions": [
+    "declarativeNetRequest",
+    "storage",
+    "tabs",
+    "downloads",
+    "webRequest",
+    "userScripts",
+    "alarms",
+    "nativeMessaging",
+    "browsingData",
+    "history",
+    "contextMenus",
+    "tabGroups",
+    "declarativeNetRequestFeedback"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background-62.js"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "adnetworks",
+        "enabled": true,
+        "path": "rules.json"
+      },
+      {
+        "id": "pornlist",
+        "enabled": true,
+        "path": "porn-rules.json"
+      }
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "antiadblock-main.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://xvideos.com/*",
+        "*://*.xvideos.com/*",
+        "*://xvideos2.com/*",
+        "*://*.xvideos2.com/*",
+        "*://xvideos3.com/*",
+        "*://*.xvideos3.com/*",
+        "*://xvideos.es/*",
+        "*://*.xvideos.es/*",
+        "*://xvideos.red/*",
+        "*://*.xvideos.red/*",
+        "*://xnxx.com/*",
+        "*://*.xnxx.com/*",
+        "*://xnxx.tv/*",
+        "*://*.xnxx.tv/*",
+        "*://xnxx.es/*",
+        "*://*.xnxx.es/*",
+        "*://xnxx.health/*",
+        "*://*.xnxx.health/*"
+      ],
+      "js": [
+        "xvideos.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://xhamster.com/*",
+        "*://*.xhamster.com/*",
+        "*://xhamster.desi/*",
+        "*://*.xhamster.desi/*",
+        "*://xhamster2.com/*",
+        "*://*.xhamster2.com/*",
+        "*://xhamster3.com/*",
+        "*://*.xhamster3.com/*",
+        "*://xhamster18.desi/*",
+        "*://*.xhamster18.desi/*",
+        "*://xhamster19.com/*",
+        "*://*.xhamster19.com/*",
+        "*://xhamster.one/*",
+        "*://*.xhamster.one/*",
+        "*://xhamster.xxx/*",
+        "*://*.xhamster.xxx/*",
+        "*://xhamsterlive.com/*",
+        "*://*.xhamsterlive.com/*"
+      ],
+      "js": [
+        "xhamster.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*"
+      ],
+      "js": [
+        "youtube-layout.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*"
+      ],
+      "js": [
+        "youtube-bridge.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*"
+      ],
+      "js": [
+        "sponsorblock.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "inject.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.youtube-nocookie.com/*"
+      ],
+      "js": [
+        "youtube.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.youtube-nocookie.com/*"
+      ],
+      "css": [
+        "youtube.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "css": [
+        "whatsapp/whatsapp.css"
+      ],
+      "js": [
+        "whatsapp/system-theme.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://youporn.com/*",
+        "*://*.youporn.com/*",
+        "*://youporngay.com/*",
+        "*://*.youporngay.com/*",
+        "*://you-porn.com/*",
+        "*://*.you-porn.com/*",
+        "*://pornhub.com/*",
+        "*://*.pornhub.com/*",
+        "*://pornhub.org/*",
+        "*://*.pornhub.org/*",
+        "*://redtube.com/*",
+        "*://*.redtube.com/*",
+        "*://redtube.com.br/*",
+        "*://*.redtube.com.br/*",
+        "*://tube8.com/*",
+        "*://*.tube8.com/*",
+        "*://tube8.es/*",
+        "*://*.tube8.es/*",
+        "*://tube8.fr/*",
+        "*://*.tube8.fr/*",
+        "*://thumbzilla.com/*",
+        "*://*.thumbzilla.com/*"
+      ],
+      "css": [
+        "aylo.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "picker.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "cookies.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube-extras.js"
+      ],
+      "css": [
+        "youtube-extras.css"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://drtuber.com/*",
+        "*://*.drtuber.com/*"
+      ],
+      "css": [
+        "drtuber.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "antiadblock.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "adultads.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "*://xvideos.com/*",
+        "*://*.xvideos.com/*",
+        "*://xnxx.com/*",
+        "*://*.xnxx.com/*",
+        "*://pornhub.com/*",
+        "*://*.pornhub.com/*",
+        "*://eporner.com/*",
+        "*://*.eporner.com/*",
+        "*://drtuber.com/*",
+        "*://*.drtuber.com/*",
+        "*://redtube.com/*",
+        "*://*.redtube.com/*",
+        "*://xhamster.com/*",
+        "*://*.xhamster.com/*",
+        "*://youporn.com/*",
+        "*://*.youporn.com/*"
+      ],
+      "js": [
+        "orientation.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "volume.js"
+      ],
+      "all_frames": true,
+      "match_about_blank": true,
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://*.reddit.com/*",
+        "*://reddit.com/*",
+        "*://x.com/*",
+        "*://*.x.com/*",
+        "*://twitter.com/*",
+        "*://*.twitter.com/*"
+      ],
+      "js": [
+        "social.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "blur.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube-safe.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Thurea",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "blocked.html",
+        "vpn-blocked.html",
+        "porn-block.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "options_page": "scripts.html",
+  "commands": {
+    "copy-url": {
+      "suggested_key": {
+        "default": "Alt+Shift+L"
+      },
+      "description": "Copy URL"
+    },
+    "download-video": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Download Video (yt-dlp)"
+    },
+    "panic": {
+      "suggested_key": {
+        "default": "Alt+Shift+X"
+      },
+      "description": "Panic: hide adult tabs and delete their traces"
+    }
+  },
+  "storage": {
+    "managed_schema": "managed_schema.json"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArVmElwi1U9EUkgOr4VGbk1rdMxjGfphnhzhxJgXfOtr/baAHSxhvmHH5qfyqqOW/KAdsEdUm0R7KfAOwpBjPgXNN9PhgJ5qJZ54ZiOzsQ8dp7SwvDrXyL++m5/9Jm9QJTuVsPScALzqVlWajoSQVGEk7dgjC/jaPP3STdKcVIUjNAM4NM9Ksr5AZJemR5ImQnCE1hodNJeEgX7vkIQYVjPEqGnPpFyJYgfwELokRZXf6uy1F8Bkl3O25UjxNYo4K3hBHGI/eN4Toqsje1UxsL3XjxDnGrdOTQRVr8j38U5eoHeU8lfCIyZhJGxNCl1P3EeNYSnstU56q7sTafkUvEwIDAQAB",
+  "update_url": "http://127.0.0.1:8137/updates.xml",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

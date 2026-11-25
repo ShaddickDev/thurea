@@ -1,0 +1,13 @@
+[package]
+name = "thurea-core"
+description = "Thurea's shared brain: policy, blocklist matching, protection status, and the device mesh."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hmac.workspace = true
+getrandom.workspace = true

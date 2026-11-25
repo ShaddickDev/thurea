@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Thurea: re-applying the blocker
+When = PostTransaction
+Exec = /usr/lib/thurea/thurea-apply

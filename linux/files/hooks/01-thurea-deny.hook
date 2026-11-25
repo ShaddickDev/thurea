@@ -1,0 +1,18 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = torbrowser-launcher
+Target = tor-browser
+Target = tor-browser-bin
+Target = mullvad-browser
+Target = mullvad-browser-bin
+Target = opera
+Target = opera-beta
+Target = opera-developer
+
+[Action]
+Description = Thurea: checking for browsers that bypass the blocker
+When = PreTransaction
+Exec = /usr/lib/thurea/deny-install
+AbortOnFail

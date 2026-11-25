@@ -1,0 +1,8 @@
+[Unit]
+Description=Thurea: install the newest signed Thurea release from GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/thurea/thurea-update

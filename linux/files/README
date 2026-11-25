@@ -1,0 +1,19 @@
+Thurea — harmful-site blocker managed by the system
+
+What it does
+  /etc/hosts            64,000+ harmful domains pointed nowhere (your own lines are kept)
+  systemd-resolved      Cloudflare for Families DNS (harmful content filtered)
+  Chromium, Chrome, Brave, Edge, Vivaldi
+                        Thurea force-installed (can't be disabled or removed), family DNS
+                        inside the browser, Google SafeSearch, YouTube safe filter (no Restricted Mode),
+                        no incognito or guest windows
+  network (nftables)    only the system resolver may send DNS; other apps can't use DNS-over-TLS or
+                        public DNS-over-HTTPS servers (so browsers like Ladybird stay on family DNS)
+  Firefox family        family DNS locked on, private browsing off, known harmful sites blocked
+  pacman                removing thurea is refused; Tor Browser, Mullvad Browser and
+                        Opera can't be installed; everything is re-applied after every
+                        transaction
+  systemd               re-applied at boot, every 5 minutes and whenever a guarded file changes;
+                        guarded files are made immutable (chattr +i)
+
+Updating Thurea: rebuild with build.sh in the source folder, then `sudo pacman -U` the new package.

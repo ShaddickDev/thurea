@@ -1,0 +1,14 @@
+[Unit]
+Description=Thurea: re-apply when a guarded file changes
+
+[Path]
+PathChanged=/etc/hosts
+PathChanged=/etc/systemd/resolved.conf.d
+PathChanged=/etc/chromium/policies/managed
+PathChanged=/etc/opt/chrome/policies/managed
+PathChanged=/etc/brave/policies/managed
+PathChanged=/etc/firefox/policies
+Unit=thurea.service
+
+[Install]
+WantedBy=multi-user.target

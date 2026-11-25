@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px system-ui, sans-serif; width: 320px; margin: 0; padding: 14px; background: #16181d; color: #eee; }
+  h1 { font-size: 15px; margin: 0 0 12px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #999; margin: 16px 0 8px; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
+  .host { color: #aaa; font-size: 12px; word-break: break-all; }
+  button { padding: 8px; border: 0; border-radius: 6px; background: #2b2f38; color: #eee; cursor: pointer; }
+  button:hover { background: #3a3f4b; }
+  button.primary { background: #c0392b; }
+  button.primary:hover { background: #e04a3a; }
+  .full { width: 100%; margin-top: 6px; }
+  .switch { position: relative; width: 38px; height: 20px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: #555; border-radius: 20px; transition: .2s; }
+  .slider:before { content: ""; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .2s; }
+  input:checked + .slider { background: #c0392b; }
+  input:checked + .slider:before { transform: translateX(18px); }
+  .media { display: flex; align-items: center; gap: 8px; padding: 8px; background: #1f2229; border-radius: 6px; margin-bottom: 6px; }
+  .media .info { flex: 1; min-width: 0; }
+  .media .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: #444; margin-right: 4px; }
+  .media .tag.hls { background: #2d6cdf; }
+  .media .tag.q { background: #27ae60; }
+  .media .url { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty { color: #888; font-size: 12px; }
+  .us { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; }
+  .us span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+  .qgrid button { padding: 7px 4px; font-size: 12px; }
+  .job { background: #1f2229; border-radius: 6px; padding: 7px 8px; margin-top: 6px; font-size: 12px; }
+  .job .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .job .s { color: #999; font-size: 11px; margin-top: 3px; }
+  .job .s.err { color: #ff8a80; }
+  .job .s.done { color: #81c995; }
+  .pbar { height: 4px; background: #333; border-radius: 2px; margin-top: 5px; overflow: hidden; }
+  .pbar div { height: 100%; background: #c0392b; width: 0; transition: width .3s; }
+  .drop { margin-top: 12px; background: #1f2229; border-radius: 6px; padding: 0 10px; }
+  .drop summary { cursor: pointer; padding: 9px 0; font-weight: 600; list-style: none; display: flex; justify-content: space-between; user-select: none; }
+  .drop summary::-webkit-details-marker { display: none; }
+  .drop summary::after { content: "▾"; color: #999; transition: transform .2s; }
+  .drop[open] summary::after { transform: rotate(180deg); }
+  .drop[open] { padding-bottom: 10px; }
+  .sbcats { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 12px; }
+  .sbcats label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .sbcats .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .locked { background: #2a2020; border: 1px solid #5a2d2d; border-radius: 6px; padding: 8px 10px; color: #ffb4a8; }
+  .note { font-size: 11px; color: #777; margin-top: 10px; }
+  .hide-item { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; color: #aaa; margin: 4px 0; }
+  .hide-item code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hide-item button { padding: 2px 7px; font-size: 11px; }
+  button.danger { background: #7a1f1f; }
+  button.danger:hover { background: #a02a2a; }
+  .card { background: #1f2229; border-radius: 8px; padding: 2px 10px 10px; }
+  .card .row { margin: 8px 0 0; }
+  .sub { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #888; margin: 14px 0 4px; }
+  .drop > .sub:first-of-type, .card > .sub:first-child { margin-top: 4px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .pair button { width: 100%; }
+  .site { color: #aaa; font-size: 12px; margin: -8px 0 4px; word-break: break-all; }
+  .kbd { opacity: .6; font-size: 11px; }
+  .qgrid .empty { grid-column: 1 / -1; }
+  .tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; margin: 0 0 12px; background: #1f2229; border-radius: 8px; padding: 3px; }
+  .tabs button { padding: 6px 2px; font-size: 12px; background: none; border-radius: 6px; color: #aaa; }
+  .tabs button:hover { background: #2b2f38; color: #eee; }
+  .tabs button.active { background: #c0392b; color: #fff; }
+  .tabs button[hidden] { display: none; }
+  /* 🔊 Mix */
+  .mix { padding: 8px 0 6px; border-top: 1px solid #2b2f38; }
+  .mix:first-child { border-top: 0; }
+  .mix-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .mix-head img, .mix-head .ico { width: 14px; height: 14px; flex: none; }
+  .mix-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ccc; }
+  .mix-head .here { font-size: 10px; color: #c0392b; font-weight: 600; text-transform: uppercase; }
+  .mix-head button { padding: 2px 6px; font-size: 13px; background: none; }
+  .mix-head button:hover { background: #2b2f38; }
+  .mix-ctl { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .mix-ctl input { flex: 1; accent-color: #c0392b; }
+  .mix-ctl input.boost { accent-color: #e67e22; }
+  .mix-val { width: 38px; text-align: right; font-size: 11px; color: #aaa; font-variant-numeric: tabular-nums; }
+  .mix-warn { font-size: 11px; color: #e67e22; margin-top: 2px; }
+  .panel[hidden] { display: none; }
+  .panel > h2:first-child { margin-top: 0; }
+  .card + h2 { margin-top: 14px; }
+  .card > .sub { margin-top: 12px; }
+  .blk { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: #bbb; margin: 3px 0; }
+  .blk b { color: #eee; font-weight: 500; }
+  .blk span:last-child { color: #777; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <h1><img src="icons/thurea.svg" alt="" style="width:1em;height:1em;vertical-align:-0.12em"> Thurea</h1>
+  <div class="site" id="host"></div>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="thurea"><img src="icons/thurea.svg" alt="" style="width:1em;height:1em;vertical-align:-0.12em"> Thurea</button>
+    <button data-tab="site">🌐 Site</button>
+    <button data-tab="video">🎬 Video</button>
+    <button data-tab="mix">🔊 Mix</button>
+  </nav>
+
+  <!-- 🔊 Mix: volume per tab, 0–400% -->
+  <section class="panel" data-panel="mix" hidden>
+    <div class="card" id="mixList"><div class="note">Loading…</div></div>
+    <div class="pair" style="margin-top:8px">
+      <button id="mixReset">Reset all to 100%</button>
+      <button id="mixSolo">🎧 Mute other tabs</button>
+    </div>
+  </section>
+
+  <!-- 🛡️ Thurea: settings that apply everywhere -->
+  <section class="panel" data-panel="thurea">
+    <div class="card" style="margin-bottom:10px">
+      <div class="row"><span>🚫 Harmful-site blocker</span><span class="host" id="pbState">On</span></div>
+      <div class="note" id="pbStats" style="margin:2px 0 0"></div>
+      <div class="row"><span>Images from harmful sites</span><span class="host">Blurred</span></div>
+    </div>
+    <div class="card">
+      <div class="row" style="margin-bottom:0"><span>Ad blocking</span>
+        <label class="switch"><input type="checkbox" id="enabled"><span class="slider"></span></label>
+      </div>
+      <div class="note" id="stats" style="margin:2px 0 0"></div>
+      <div class="row"><span>Block trackers <span class="host">(EasyPrivacy)</span></span>
+        <label class="switch"><input type="checkbox" id="privacyFilters"><span class="slider"></span></label>
+      </div>
+      <div class="row"><span>Auto-reject cookie banners</span>
+        <label class="switch"><input type="checkbox" id="cookieReject"><span class="slider"></span></label>
+      </div>
+    </div>
+    <h2><img src="icons/thurea.svg" alt="" style="width:1em;height:1em;vertical-align:-0.12em"> Protection</h2>
+    <div class="card">
+      <div class="row"><span>Site protection <span class="host" id="adultMode"></span></span>
+        <label class="switch"><input type="checkbox" id="adult"><span class="slider"></span></label>
+      </div>
+      <div class="row"><span>Auto-confirm age prompts</span>
+        <label class="switch"><input type="checkbox" id="ageGateAuto"><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <h2>🧹 Privacy</h2>
+    <div class="card">
+      <div class="row"><span>Clear this site&#39;s cache when I leave</span>
+        <label class="switch"><input type="checkbox" id="adultCookieClean"><span class="slider"></span></label>
+      </div>
+      <div class="note" id="cookieNote" style="margin:0"></div>
+      <button id="panic" class="full danger" style="margin-top:10px">🚨 Panic: hide everything <span class="kbd">Alt+Shift+X</span></button>
+    </div>
+
+    <h2>⚙️ Filters</h2>
+    <div class="card">
+      <div class="row"><span>Extra site filters</span>
+        <button id="filtersUpdate" style="padding:4px 8px;font-size:11px">Update</button>
+      </div>
+      <div class="note" id="filtersStatus" style="margin-top:2px">Loading…</div>
+    </div>
+  </section>
+
+  <!-- 🌐 Site: the page you're on -->
+  <section class="panel" data-panel="site" hidden>
+    <h2>Protection here</h2>
+    <button id="allow" class="full" style="margin-top:0">Pause on this site</button>
+    <div class="row" style="margin:8px 0 0"><span>Allow pop-ups &amp; redirects here</span>
+      <label class="switch"><input type="checkbox" id="allowNavHere"><span class="slider"></span></label>
+    </div>
+    <div class="sub">Blocked here</div>
+    <div id="blockLog"><div class="empty">Nothing blocked on this site yet.</div></div>
+    <h2>Tools</h2>
+    <div class="pair">
+      <button id="pickEl">🎯 Hide an element</button>
+      <button id="copyUrl">📋 Copy URL <span class="kbd">Alt+Shift+L</span></button>
+    </div>
+    <div id="userHides"></div>
+    <h2>Userscripts</h2>
+    <div class="row" style="margin:0 0 4px"><span class="host">Running on this page</span>
+      <button id="usManage" style="padding:4px 8px;font-size:11px">Manage</button>
+    </div>
+    <div id="usWarn" class="note" style="color:#e0a84a;margin:0 0 6px" hidden>Userscripts are off: turn on <b>Allow User Scripts</b> for Thurea (Manage shows how).</div>
+    <div id="usList"><div class="empty">None on this page.</div></div>
+  </section>
+
+  <!-- 🎬 Video: downloads, YouTube, Twitch -->
+  <section class="panel" data-panel="video" hidden>
+    <div id="dlGroup" hidden>
+    <h2>⬇ Download</h2>
+    <div class="card">
+    <div id="yt" hidden>
+      <div class="sub">This video</div>
+      <div id="ytTitle" class="host"></div>
+      <div id="ytQualities" class="qgrid"><div class="empty">Checking available qualities…</div></div>
+    </div>
+
+    <div class="sub">Send page to yt-dlp</div>
+    <div class="qgrid" style="margin-top:4px">
+      <button id="dlVideo" class="primary">⬇ Video</button>
+      <button id="dlAudio">🎵 Audio</button>
+      <button id="dlPlaylist" hidden>📃 Playlist</button>
+    </div>
+    <div class="note" id="dlNote" style="margin-top:2px"></div>
+
+    <section id="generic">
+      <div class="sub">Videos found on this page</div>
+      <div id="list"><div class="empty">Looking…</div></div>
+    </section>
+
+    <div class="sub">Progress</div>
+    <div id="dlJobs"><div class="empty">No downloads yet.</div></div>
+    </div>
+    </div>
+    <h2>▶ YouTube</h2>
+    <div class="card" id="ytGroup">
+    <div class="sub">Layout</div>
+    <div class="row" style="margin:4px 0 0"><span>Classic layout</span>
+      <label class="switch"><input type="checkbox" id="ytClassic"><span class="slider"></span></label>
+    </div>
+    <div class="row" style="margin:8px 0 0"><span>Hide Shorts</span>
+      <label class="switch"><input type="checkbox" id="ytHideShorts"><span class="slider"></span></label>
+    </div>
+
+    <div class="sub">Playback</div>
+    <div class="row" style="margin:4px 0 0"><span>Autoplay off</span>
+      <label class="switch"><input type="checkbox" id="ytNoAutoplay"><span class="slider"></span></label>
+    </div>
+    <div class="row" style="margin:8px 0 0"><span>Remember speed per channel</span>
+      <label class="switch"><input type="checkbox" id="ytChannelSpeed"><span class="slider"></span></label>
+    </div>
+
+    <div class="sub">Sponsors</div>
+    <div class="row" style="margin:4px 0 0"><span>Skip sponsors <span class="host">(SponsorBlock)</span></span>
+      <label class="switch"><input type="checkbox" id="sbOn"><span class="slider"></span></label>
+    </div>
+    <div id="sbCats" class="sbcats"></div>
+    </div>
+    <h2>🟣 Twitch</h2>
+    <div class="card" id="twGroup">
+    <div id="twList"><div class="empty">Twitch scripts not installed.</div></div>
+    </div>
+  </section>
+
+  <script src="userscripts-lib.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

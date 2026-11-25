@@ -1,0 +1,16 @@
+/* DrTuber ad slots, hidden before the page paints (off while Thurea is paused). */
+html:not([data-thurea-off]) :is(
+  .spots, .live-spot-size, .spot-title,                       /* top live-cam strip */
+  .aside_panel_video > .heading:has(+ .item_spots),           /* "Advertisement" heading, right column */
+  .item_spots, .item_spot, .mod_wrapper_spot_300,              /* right-column ad frames */
+  iframe[src*="player_right_ads"],
+  .section_frame_tools > .wrapper_frame:has(.abtext),          /* "Advertising" box under the player */
+  .livecams_main,                                              /* "Chat with DrTuber live girls now!" */
+  span.th[class*="ch-related"]:not(:has(a)),                   /* empty ad tile in the video grid */
+  #adx_extra_data,
+  /* in-player ad overlay ("Advertisement" / "Close and play") and bottom ad strip */
+  #player [class*="spot-box"], #player [class*="spot-bottom"], #player .spot-close-play, #player .spot-header,
+  #adx_ad, .player-adx-block, #adx_scripts
+) {
+  display: none !important;
+}

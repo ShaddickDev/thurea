@@ -1,0 +1,81 @@
+@List/Cons = (a (b ((@List/Cons/tag (a (b c))) c)))
+
+@List/Cons/tag = 1
+
+@List/Nil = ((@List/Nil/tag a) a)
+
+@List/Nil/tag = 0
+
+@QTree/Leaf = (a (b ((@QTree/Leaf/tag (a (b c))) c)))
+
+@QTree/Leaf/tag = 1
+
+@QTree/Node = (a (b ((@QTree/Node/tag (a (b c))) c)))
+
+@QTree/Node/tag = 0
+
+@any_rule = ((@any_rule__C2 (a b)) (a b))
+
+@any_rule__C0 = (b (a c))
+  & @any_rule ~ (a (b c))
+
+@any_rule__C1 = (* (a (d ({b c} e))))
+  & @is_prefix ~ (a (b ?((@any_rule__C0 (* (* (* 1)))) (c (d e)))))
+
+@any_rule__C2 = (?(((* 0) @any_rule__C1) a) a)
+
+@audit = ((@audit__C3 (a b)) (a b))
+
+@audit__C0 = (* (a b))
+  & @List/Cons ~ (a (@List/Nil b))
+
+@audit__C1 = (a (d ({b e} g)))
+  & @concat ~ (c (f g))
+  &!@audit ~ (a (b c))
+  &!@audit ~ (d (e f))
+
+@audit__C2 = (* (c (b (a d))))
+  & @any_rule ~ (a (b ?(((* @List/Nil) @audit__C0) (c d))))
+
+@audit__C3 = (?((@audit__C1 @audit__C2) a) a)
+
+@concat = ((@concat__C1 (a b)) (a b))
+
+@concat__C0 = (* (a (b (c e))))
+  & @List/Cons ~ (a (d e))
+  & @concat ~ (b (c d))
+
+@concat__C1 = (?(((a a) @concat__C0) b) b)
+
+@is_prefix = ((@is_prefix__C4 (a b)) (a b))
+
+@is_prefix__C0 = (* (a (b c)))
+  & @is_prefix ~ (a (b c))
+
+@is_prefix__C1 = (* (a (c ($([=] $(a ?(((* (* 0)) @is_prefix__C0) (b (c d))))) (b d)))))
+
+@is_prefix__C2 = (?(((* (* 0)) @is_prefix__C1) a) a)
+
+@is_prefix__C3 = (* (a (b ((@is_prefix__C2 (a (b c))) c))))
+
+@is_prefix__C4 = (?(((* 1) @is_prefix__C3) a) a)
+
+@main = q
+  & @audit ~ (k (p q))
+  & @QTree/Node ~ (d (j k))
+  & @QTree/Leaf ~ (0 (c d))
+  & @List/Cons ~ (1 (b c))
+  & @List/Cons ~ (2 (a b))
+  & @List/Cons ~ (3 (@List/Nil a))
+  & @QTree/Node ~ (g (i j))
+  & @QTree/Leaf ~ (1 (f g))
+  & @List/Cons ~ (1 (e f))
+  & @List/Cons ~ (3 (@List/Nil e))
+  & @QTree/Leaf ~ (2 (h i))
+  & @List/Cons ~ (5 (@List/Nil h))
+  & @List/Cons ~ (m (o p))
+  & @List/Cons ~ (1 (l m))
+  & @List/Cons ~ (2 (@List/Nil l))
+  & @List/Cons ~ (n (@List/Nil o))
+  & @List/Cons ~ (5 (@List/Nil n))
+

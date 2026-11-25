@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="helper_desc">Thurea helper: keeps only the allowed app stores able to install apps, and skips, mutes and hides ads in the YouTube app. Reads only YouTube, pinned apps and Settings; nothing leaves the phone.</string>
+  <string name="account_helper_desc">Thurea helper: during setup, taps through signing your accounts out and back in; after Thurea reinstalls MicroG-RE, taps Allow on its battery prompt. Never types passwords or PINs.</string>
+    <string name="protection_summary">Your Device is protected by Thurea</string>
+</resources>

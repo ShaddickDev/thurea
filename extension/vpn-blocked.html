@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Blocked</title>
+<style>
+  body { font: 15px system-ui, sans-serif; background: #16181d; color: #eee; display: grid; place-items: center; height: 100vh; margin: 0; }
+  .card { text-align: center; max-width: 440px; }
+  h1 { font-size: 20px; }
+  p { color: #aaa; }
+  #ok { color: #6c6; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1><img src="icons/thurea.svg" alt="" style="width:1em;height:1em;vertical-align:-0.12em"> Blocked: VPN not connected</h1>
+    <p>These sites only open while you're on a VPN outside the UK. Your browsing history has been wiped. Logins and saved passwords are kept.</p>
+    <p id="ok" hidden>VPN connected. You can open the site again.</p>
+  </div>
+  <script src="vpn-blocked.js"></script>
+</body>
+</html>

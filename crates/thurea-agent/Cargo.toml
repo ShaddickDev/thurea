@@ -1,0 +1,16 @@
+[package]
+name = "thurea-agent"
+description = "Thurea for Linux and Windows: enforces the family policy and joins the household mesh."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "thurea"
+path = "src/main.rs"
+
+[dependencies]
+thurea-core = { path = "../thurea-core" }
+serde.workspace = true
+serde_json.workspace = true
+getrandom.workspace = true

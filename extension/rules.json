@@ -1,0 +1,1942 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "trafficjunky.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "trafficjunky.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "exoclick.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "exosrv.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "exdynsrv.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "magsrv.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "realsrv.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "juicyads.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "juicyads.me"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "trafficstars.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "tsyndicate.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "plugrush.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "ero-advertising.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "popads.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "popcash.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 16,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "hilltopads.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 17,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "hilltopads.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 18,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "clickadu.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 19,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "adsterra.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 20,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "adsterratech.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 21,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "a-ads.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 22,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "adxpansion.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 23,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "trafficfactory.biz"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 24,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "trafficforce.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 25,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "trafficshop.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 26,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "twinrdsrv.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 27,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "twinrdengine.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 28,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "syndication.exoclick.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 29,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "crakrevenue.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 30,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "awempire.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 31,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "adspyglass.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 32,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "propellerads.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 33,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "propellerclick.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 34,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "onclkds.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 35,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "onclickads.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 36,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "popmyads.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 37,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "adcash.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 38,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "admaven.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 39,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "ad-maven.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 40,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "richpush.co"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 41,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "pushame.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 42,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "evadav.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 43,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "zeropark.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 44,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "mobiads.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 45,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "doublepimp.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 46,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "eroadvertising.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 47,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "adultforce.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 48,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "trafficholder.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "websocket",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 49,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/ads/",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 50,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/ad_banner",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 51,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/adserver",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 52,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/popunder",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 53,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/pop-under",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 54,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/banner_ads",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 55,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/advert",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 56,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/vast.xml",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 57,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/prebid",
+      "domainType": "thirdParty",
+      "resourceTypes": [
+        "script",
+        "sub_frame",
+        "image",
+        "xmlhttprequest"
+      ]
+    }
+  },
+  {
+    "id": 100,
+    "priority": 2,
+    "action": {
+      "type": "redirect",
+      "redirect": {
+        "extensionPath": "/blocked.html"
+      }
+    },
+    "condition": {
+      "requestDomains": [
+        "a-ads.com",
+        "ad-maven.com",
+        "adcash.com",
+        "admaven.com",
+        "adspyglass.com",
+        "adsterra.com",
+        "adsterratech.com",
+        "adultforce.com",
+        "adxpansion.com",
+        "awempire.com",
+        "clickadu.com",
+        "crakrevenue.com",
+        "doublepimp.com",
+        "ero-advertising.com",
+        "eroadvertising.com",
+        "evadav.com",
+        "exdynsrv.com",
+        "exoclick.com",
+        "exosrv.com",
+        "hilltopads.com",
+        "hilltopads.net",
+        "juicyads.com",
+        "juicyads.me",
+        "magsrv.com",
+        "mobiads.com",
+        "onclickads.net",
+        "onclkds.com",
+        "plugrush.com",
+        "popads.net",
+        "popcash.net",
+        "popmyads.com",
+        "propellerads.com",
+        "propellerclick.com",
+        "pushame.com",
+        "realsrv.com",
+        "richpush.co",
+        "syndication.exoclick.com",
+        "trafficfactory.biz",
+        "trafficforce.com",
+        "trafficholder.com",
+        "trafficjunky.com",
+        "trafficjunky.net",
+        "trafficshop.com",
+        "trafficstars.com",
+        "tsyndicate.com",
+        "twinrdengine.com",
+        "twinrdsrv.com",
+        "zeropark.com"
+      ],
+      "resourceTypes": [
+        "main_frame"
+      ]
+    }
+  },
+  {
+    "id": 200,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "doubleclick.net",
+        "googlesyndication.com",
+        "googleadservices.com",
+        "googletagservices.com",
+        "adservice.google.com"
+      ],
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 201,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/api/stats/ads",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 202,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/pagead/",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 203,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/ptracking",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 204,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/get_midroll_",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 205,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/youtubei/v1/player/ad_break",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 206,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/api/stats/atr?*adformat",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 207,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/pcs/activeview",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "ping",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 300,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/_xa/ads",
+      "requestDomains": [
+        "youporn.com",
+        "youporngay.com",
+        "you-porn.com",
+        "pornhub.com",
+        "pornhub.org",
+        "redtube.com",
+        "redtube.com.br",
+        "tube8.com",
+        "tube8.es",
+        "tube8.fr",
+        "thumbzilla.com"
+      ],
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "sub_frame",
+        "image",
+        "media",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 301,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/_xa/ads_batch",
+      "requestDomains": [
+        "fanhub.com"
+      ],
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "sub_frame",
+        "image",
+        "media",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 302,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "pemsrv.com"
+      ],
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "sub_frame",
+        "image",
+        "media",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 303,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/vast?spot=",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "script",
+        "other",
+        "sub_frame"
+      ]
+    }
+  },
+  {
+    "id": 304,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/sdk/v1/dd.master.spot.js",
+      "resourceTypes": [
+        "script"
+      ]
+    }
+  },
+  {
+    "id": 305,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "xhamsterlive.com",
+        "stripchat.com",
+        "stripchat.global",
+        "strpst.com",
+        "stripst.com",
+        "doppiocdn.com",
+        "doppiocdn.org",
+        "doppiocdn.net",
+        "doppiocdn.live",
+        "chaturbate.com",
+        "highwebmedia.com",
+        "bongacams.com",
+        "bongacams.org",
+        "bongacams.net",
+        "bcvcdn.com",
+        "livejasmin.com",
+        "dditscdn.com",
+        "camsoda.com",
+        "cam4.com",
+        "cam4.de",
+        "myfreecams.com",
+        "mfcimg.com",
+        "jerkmate.com",
+        "streamate.com",
+        "imlive.com",
+        "flirt4free.com",
+        "camster.com",
+        "cams.com",
+        "xcams.com",
+        "camcrush.com",
+        "sexcamly.com",
+        "naked.com",
+        "slutroulette.com",
+        "royalcams.com",
+        "camdolls.com",
+        "celebs.live",
+        "stripcash.com",
+        "stripcash.net"
+      ],
+      "excludedInitiatorDomains": [
+        "xhamsterlive.com",
+        "stripchat.com",
+        "stripchat.global",
+        "strpst.com",
+        "stripst.com",
+        "doppiocdn.com",
+        "doppiocdn.org",
+        "doppiocdn.net",
+        "doppiocdn.live",
+        "chaturbate.com",
+        "highwebmedia.com",
+        "bongacams.com",
+        "bongacams.org",
+        "bongacams.net",
+        "bcvcdn.com",
+        "livejasmin.com",
+        "dditscdn.com",
+        "camsoda.com",
+        "cam4.com",
+        "cam4.de",
+        "myfreecams.com",
+        "mfcimg.com",
+        "jerkmate.com",
+        "streamate.com",
+        "imlive.com",
+        "flirt4free.com",
+        "camster.com",
+        "cams.com",
+        "xcams.com",
+        "camcrush.com",
+        "sexcamly.com",
+        "naked.com",
+        "slutroulette.com",
+        "royalcams.com",
+        "camdolls.com",
+        "celebs.live",
+        "stripcash.com",
+        "stripcash.net"
+      ],
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "media",
+        "xmlhttprequest",
+        "websocket",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 306,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||valentine.xhamster.com^*/for-page",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 307,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "stripcash",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "media",
+        "xmlhttprequest",
+        "websocket",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 308,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "realDomain=creative.",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "media",
+        "xmlhttprequest",
+        "websocket",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 309,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "campaignId=videoslider",
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "media",
+        "xmlhttprequest",
+        "websocket",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 310,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||drtuber.com/player_right_ads",
+      "resourceTypes": [
+        "sub_frame",
+        "xmlhttprequest",
+        "script",
+        "image"
+      ]
+    }
+  },
+  {
+    "id": 311,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "doublepimp.com",
+        "advnet.xyz",
+        "hepelu.my"
+      ],
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "sub_frame",
+        "script",
+        "image",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 312,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/preroll.engine",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "sub_frame",
+        "script",
+        "image",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 313,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/vast.xml?key=",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "sub_frame",
+        "script",
+        "image",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 314,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/redirect/?spot_id=",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "sub_frame",
+        "script",
+        "image",
+        "other",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 315,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||drtst.com/adx_iframe_",
+      "resourceTypes": [
+        "sub_frame",
+        "xmlhttprequest",
+        "script",
+        "image"
+      ]
+    }
+  },
+  {
+    "id": 316,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/prerolls/",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "sub_frame",
+        "script",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 317,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "regexFilter": "^https?://[^/]+/do2/[a-f0-9]{20,}/vast",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "sub_frame",
+        "script",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 318,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/v1/vast.php?idzone=",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "media",
+        "sub_frame",
+        "script",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 319,
+    "priority": 2,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "rokymedia.com"
+      ],
+      "resourceTypes": [
+        "sub_frame",
+        "script",
+        "image",
+        "xmlhttprequest",
+        "media",
+        "other"
+      ]
+    }
+  }
+]

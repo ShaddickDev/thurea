@@ -1,0 +1,98 @@
+#!/bin/bash
+# Thurea: puts the porn blocker back exactly as it should be.
+# Run at boot, every 5 minutes, whenever a guarded file changes, and after every pacman transaction.
+set -u
+D=/usr/share/thurea
+STATE=/var/lib/thurea
+mkdir -p "$STATE/quarantine"
+unlock() { chattr -i "$1" 2>/dev/null || true; }
+lock()   { chattr +i "$1" 2>/dev/null || true; }
+# put <source> <target>: write only when different (so watching for changes can't loop), then lock.
+put() {
+  local src=$1 dst=$2
+  mkdir -p "$(dirname "$dst")"
+  if ! cmp -s "$src" "$dst" 2>/dev/null; then unlock "$dst"; cat "$src" > "$dst"; chmod 644 "$dst"; changed=1; fi
+  lock "$dst"
+}
+changed=0
+POLICY=$D/chromium-policy.json
+
+# 1. /etc/hosts: keep your own lines and append the full Thurea block.
+tmp=$(mktemp)
+if [ -f /etc/hosts ]; then sed '/^# >>> thurea/,/^# <<< thurea/d' /etc/hosts > "$tmp"; fi
+cat "$D/hosts-block" >> "$tmp"
+put "$tmp" /etc/hosts; rm -f "$tmp"
+
+# 2. Family DNS for the whole system (blocks porn sites no list knows yet).
+dnschanged=$changed; changed=0
+put "$D/resolved.conf" /etc/systemd/resolved.conf.d/90-thurea.conf
+if [ $changed = 1 ]; then systemctl try-reload-or-restart systemd-resolved 2>/dev/null || true; fi
+changed=$dnschanged
+
+# 2b. No app gets its own DNS server (Ladybird, Flatpaks…): only systemd-resolved and root send DNS,
+#     public DNS-over-HTTPS servers are unreachable. Re-loaded every run (it replaces itself atomically).
+nft -f "$D/thurea.nft" 2>/dev/null || true
+
+# 3. Every Chromium-family browser (installed now or later): Thurea force-installed, family DNS,
+#    SafeSearch, no YouTube Restricted Mode, no incognito/guest.
+for dir in /etc/chromium/policies/managed /etc/opt/chrome/policies/managed /etc/brave/policies/managed \
+           /etc/opt/edge/policies/managed /etc/opt/vivaldi/policies/managed /etc/vivaldi/policies/managed \
+           /etc/opt/chromium/policies/managed /etc/thorium/policies/managed; do
+  mkdir -p "$dir"
+  put "$POLICY" "$dir/00-thurea.json"
+  # Other policy files that would override these settings are moved aside.
+  for f in "$dir"/*.json; do
+    [ "$f" = "$dir/00-thurea.json" ] && continue
+    [ -f "$f" ] || continue
+    if grep -qE '"(ExtensionInstallForcelist|ExtensionSettings|DnsOverHttpsMode|DnsOverHttpsTemplates|IncognitoModeAvailability|BrowserGuestModeEnabled|ForceGoogleSafeSearch|ForceYouTubeRestrict|3rdparty)"' "$f"; then
+      unlock "$f"; mv -f "$f" "$STATE/quarantine/$(echo "$dir" | tr / _)_$(basename "$f").$(date +%s)"
+    fi
+  done
+done
+
+# 4. Firefox-family browsers: family DNS locked on, private browsing off, known porn sites blocked.
+put "$D/firefox-policies.json" /etc/firefox/policies/policies.json
+for app in /usr/lib/firefox /usr/lib/firefox-developer-edition /usr/lib/firefox-nightly /usr/lib/librewolf \
+           /opt/zen-browser-bin /usr/lib/zen-browser /usr/lib/floorp /opt/floorp /usr/lib/waterfox /opt/waterfox; do
+  [ -d "$app" ] && put "$D/firefox-policies.json" "$app/distribution/policies.json"
+done
+
+# 5. Keep the watchers running (and the daily self-update).
+for u in thurea.timer thurea.path thurea-extensions.service thurea-update.timer; do
+  systemctl is-enabled -q "$u" 2>/dev/null || systemctl enable -q "$u" 2>/dev/null || true
+  systemctl is-active -q "$u" 2>/dev/null || systemctl start "$u" 2>/dev/null || true
+done
+
+# 6. Phone setup by QR (Omarchy plugin / tray): the phone downloads Thurea from this computer on
+#    TCP 47824, only while the QR code is on screen. UFW (on by default on Omarchy) lets it in from
+#    the home network only.
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+  for net in 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12; do
+    ufw status 2>/dev/null | grep -qE "^47824/tcp +ALLOW +$net" || ufw allow proto tcp from "$net" to any port 47824 comment 'Thurea phone setup' >/dev/null 2>&1 || true
+  done
+fi
+
+# 7. Omarchy plugin: put Thurea in the bar of every Omarchy user (once; removing it from the bar
+#    afterwards is respected).
+[ -x /usr/lib/thurea/thurea-omarchy ] && /usr/lib/thurea/thurea-omarchy install-all >/dev/null 2>&1 || true
+
+# 8. Report for the tray apps (`thurea desktop-status`): what is actually in place right now.
+ok() { if "$@" >/dev/null 2>&1; then echo true; else echo false; fi; }
+mkdir -p /run/thurea; chmod 755 /run/thurea
+c_hosts=$(ok grep -q '^# >>> thurea' /etc/hosts)
+c_dns=$(ok cmp -s "$D/resolved.conf" /etc/systemd/resolved.conf.d/90-thurea.conf)
+c_fw=$(ok nft list table inet thurea)
+c_br=$(ok cmp -s "$POLICY" /etc/chromium/policies/managed/00-thurea.json)
+c_ff=$(ok cmp -s "$D/firefox-policies.json" /etc/firefox/policies/policies.json)
+c_ext=$(ok systemctl is-active -q thurea-extensions.service)
+c_upd=$(ok systemctl is-enabled -q thurea-update.timer)
+c_rm=$(ok test -f /usr/share/libalpm/hooks/00-thurea-protect.hook)
+all=true; for v in $c_hosts $c_dns $c_fw $c_br $c_ff $c_ext $c_upd $c_rm; do [ "$v" = true ] || all=false; done
+tmp=$(mktemp /run/thurea/.status.XXXXXX)
+cat > "$tmp" <<JSON
+{"protected": $all, "epoch": $(date +%s), "at": "$(date -Iseconds)", "version": "$(cat "$D/VERSION" 2>/dev/null)", "platform": "linux",
+ "checks": {"hosts": $c_hosts, "dns": $c_dns, "firewall": $c_fw, "browsers": $c_br, "firefox": $c_ff,
+            "extensionServer": $c_ext, "updates": $c_upd, "uninstallBlock": $c_rm}}
+JSON
+chmod 644 "$tmp"; mv -f "$tmp" /run/thurea/status.json
+exit 0

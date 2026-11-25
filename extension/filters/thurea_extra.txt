@@ -1,0 +1,26 @@
+! Thurea's own additions on top of EasyList Adult. Always applied (never
+! downloaded), Adblock Plus syntax.
+!
+! eporner.com: every ad slot is filled by one call to /dot/dot.php; the video
+! ads come from playhubconnect.com.
+||eporner.com/dot/
+||eporner.com/xhr/vast/
+||playhubconnect.com^
+eporner.com###movieplayer-box-adv
+eporner.com###movieplayer-box-adv-iframe
+eporner.com##.movieplayer-box-adv-box
+eporner.com###deskadmiddle
+eporner.com###admobilemiddle
+eporner.com###btasd
+eporner.com###admobilefoot
+eporner.com###addesktop
+eporner.com###admobiletop
+eporner.com###adstripe
+eporner.com###pbwuvpad
+eporner.com###videotextbanner
+eporner.com###adPlayerIfr
+eporner.com###adPlayerIfrMob
+eporner.com###adnative-1x1-iframe
+eporner.com###EPIMFrame
+eporner.com###ifadoutstream
+eporner.com##.vjs-inplayer-container

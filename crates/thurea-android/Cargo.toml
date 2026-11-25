@@ -1,0 +1,15 @@
+[package]
+name = "thurea-android"
+description = "JNI bridge: the Android app's policy, status and mesh logic, in Rust."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+thurea-core = { path = "../thurea-core" }
+serde.workspace = true
+serde_json.workspace = true
+jni = "0.21"

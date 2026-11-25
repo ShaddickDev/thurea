@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thurea</title>
+<style>
+  :root { --bg: #f4f6f9; --card: #fff; --text: #14171c; --muted: #5d6573; --accent: #2f6fd6; --bad: #c4462b; --line: #e3e7ee; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111318; --card: #1a1e26; --text: #e8ebf0; --muted: #98a1b0; --accent: #8cc8ff; --bad: #ff7a5c; --line: #2a303b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
+  header h1 { margin: 0; font-size: 26px; }
+  .navigation { display: inline-grid; width: 38px; height: 38px; padding: 0; place-items: center; font-size: 20px; }
+  #gear { margin-left: auto; align-self: start; flex-shrink: 0; }
+  #line { color: var(--muted); }
+  #line.bad { color: var(--bad); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin: 14px 0; }
+  .eyebrow { font-size: 12px; letter-spacing: .08em; color: var(--accent); font-weight: 600; }
+  #verse-text { font-family: Georgia, serif; font-style: italic; font-size: 17px; margin: 8px 0; }
+  #verse-ref { text-align: right; color: var(--muted); font-size: 13px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; padding: 10px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { button.primary { color: #111318; } }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  label.t { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; cursor: pointer; }
+  label.t small { display: block; color: var(--muted); }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--accent); }
+  #phone { text-align: center; }
+  #qr { background: #fff; border-radius: 12px; padding: 0; display: inline-block; margin: 10px 0; }
+  #qr svg { display: block; width: min(320px, 80vw); height: auto; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .credits { color: var(--muted); font-size: 12px; margin-top: 26px; }
+  /* The logo draws itself: outline 0–0.9s, fill 0.75–1.15s, check 1.05–1.4s. */
+  .mark .o { fill: none; stroke: #8cc8ff; stroke-width: 2.6; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .mark .f { opacity: 0; }
+  .mark .c { fill: none; stroke: #111318; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .mark.play .o { animation: draw .9s cubic-bezier(.23,1,.32,1) forwards; }
+  .mark.play .f { animation: fade .4s .75s linear forwards; }
+  .mark.play .c { animation: draw .35s 1.05s cubic-bezier(.23,1,.32,1) forwards; }
+  .mark.done .o { stroke-dashoffset: 0; } .mark.done .f { opacity: 1; } .mark.done .c { stroke-dashoffset: 0; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes fade { to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .mark.play .o, .mark.play .f, .mark.play .c { animation-duration: 1ms; animation-delay: 0s; } }
+</style>
+</head>
+<body>
+<main>
+<div id="home">
+  <header>
+    <svg class="mark" id="mark" width="72" height="72" viewBox="26 26.5 56 56" aria-hidden="true">
+      <defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="31" y1="27" x2="77" y2="82"><stop offset="0" stop-color="#A9D8FF"/><stop offset="1" stop-color="#4F86E0"/></linearGradient></defs>
+      <path class="f" d="M54,27 L77,35.5 V52 C77,66.5 67.5,76.5 54,82 C40.5,76.5 31,66.5 31,52 V35.5 Z" fill="url(#g)"/>
+      <path class="o" pathLength="1" d="M54,27 L77,35.5 V52 C77,66.5 67.5,76.5 54,82 C40.5,76.5 31,66.5 31,52 V35.5 Z"/>
+      <path class="c" pathLength="1" d="M43.5,54.5 L51,62 L65,47"/>
+    </svg>
+    <div><h1>Thurea</h1><div id="line" role="status">Checking protection…</div></div>
+    <button class="navigation" id="gear" type="button" aria-label="Settings" title="Settings">⚙</button>
+  </header>
+
+  <section class="card" id="verse" hidden>
+    <div class="eyebrow">VERSE OF THE DAY</div>
+    <div id="verse-text"></div>
+    <div id="verse-ref"></div>
+  </section>
+
+  <section>
+    <div class="row">
+      <button class="primary" id="phone-btn">Set up a phone</button>
+      <button id="reapply">Re-apply</button>
+    </div>
+    <div class="muted" id="action"></div>
+  </section>
+
+  <section class="card" id="phone" hidden>
+    <div class="eyebrow">SET UP A PHONE WITH THUREA</div>
+    <div class="row" style="justify-content:center;margin:12px 0">
+      <button id="mode-reset" class="primary">Reset phone</button>
+      <button id="mode-keep">Keep my phone</button>
+    </div>
+    <div id="qr"></div>
+    <p class="muted" id="phone-progress"></p>
+    <ol id="steps-reset" style="text-align:left">
+      <li>Start with a new phone, or factory-reset it (this erases it).</li>
+      <li>On the first Welcome screen, tap the same spot 6 times. A scanner opens.</li>
+      <li>Scan this code. The phone installs Thurea from this computer, and Thurea is in charge before the home screen appears.</li>
+    </ol>
+    <ol id="steps-keep" style="text-align:left" hidden>
+      <li>On the phone: Settings → About phone → tap Build number 7 times. (Or plug it in by USB with USB debugging on, and skip to step 3.)</li>
+      <li>Settings → System → Developer options → Wireless debugging: on → Pair device with QR code.</li>
+      <li>Scan this code. Thurea installs over Wi-Fi, signs your accounts out for a moment (Android needs that once), takes charge, then signs you back in.
+          Nothing is erased; you enter passwords on the phone.</li>
+    </ol>
+    <label class="t" id="wifi-row" style="justify-content:center"><input type="checkbox" id="wifi" checked> Include this computer's Wi-Fi in the code</label>
+    <p class="muted" id="phone-note"></p>
+    <button id="phone-close">Close</button>
+  </section>
+
+</div>
+
+<section id="settings" hidden aria-labelledby="settings-title">
+  <header>
+    <button class="navigation" id="settings-back" type="button" aria-label="Back to Thurea" title="Back to Thurea">←</button>
+    <h1 id="settings-title">Settings</h1>
+  </header>
+  <div class="card">
+    <label class="t"><span>Verse of the day<small>A Bible verse here each day (World English Bible)</small></span><input type="checkbox" id="p-verses"></label>
+    <label class="t"><span>Opening animation<small>The Thurea logo draws itself when Thurea opens</small></span><input type="checkbox" id="p-animation"></label>
+  </div>
+  <p class="credits">Verses: World English Bible (public domain). Adult-site list: StevenBlack/hosts (MIT) and The Block List Project (Unlicense).
+    Ad and tracker filters: EasyList and EasyPrivacy (GPL-3.0 or CC BY-SA 3.0). All credits: /usr/share/thurea/CREDITS.md</p>
+</section>
+</main>
+<script>
+"use strict";
+const T = location.pathname.split("/")[1];          // this page's secret path segment
+const api = (p, opt) => fetch(`/${T}/api/${p}`, opt).then(r => r.json());
+const $ = id => document.getElementById(id);
+let first = true, phoneOn = false;
+
+function render(s) {
+  const st = s.status || {}, v = s.verse || {}, p = s.prefs || {};
+  const protectedDevice = st.state === "ok";
+  const summary = protectedDevice ? "Your Device is protected by Thurea" : st.line || "Checking protection…";
+  const line = $("line");
+  if (line.textContent !== summary) line.textContent = summary;
+  line.classList.toggle("bad", !protectedDevice && !!st.line);
+  $("verse").hidden = p.verses === false || !v.text;
+  $("verse-text").textContent = v.text ? `“${v.text}”` : "";
+  $("verse-ref").textContent = v.ref ? `${v.ref} · ${v.translation || "WEB"}` : "";
+  $("p-verses").checked = p.verses !== false;
+  $("p-animation").checked = p.animation !== false;
+  if (first) { first = false; $("mark").classList.add(p.animation === false ? "done" : "play"); }
+}
+function refresh() { api("state").then(render).catch(() => {}); }
+
+function qrSvg(rows) {
+  const n = rows.length; let d = "";
+  rows.forEach((r, y) => { for (let x = 0; x < n; x++) if (r[x] === "1") d += `M${x},${y}h1v1h-1z`; });
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><rect width="${n}" height="${n}" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
+}
+const events = { downloading: d => `${d} is downloading Thurea…`, downloaded: () => "The phone has Thurea and is setting itself up.",
+  retry: d => `The download broke off (${d}); the phone will retry.`, joined: d => `${d} joined the household. All done.`,
+  finished: () => "Done: the phone is protected. You can close this.", expired: () => "No phone after 45 minutes. Start again when the phone is ready.",
+  found: () => "Found the phone. Pairing…", paired: () => "Paired. Connecting…", connected: () => "Connected to the phone",
+  phone: d => `Setting up ${d}`, installing: () => "Installing Thurea…", installed: () => "Thurea is installed",
+  signout: d => `Signing out for a moment: ${d}. Confirm on the phone, and enter your PIN there if it asks.`,
+  "signout-wait": d => `Signing out for a moment: ${d}. Confirm on the phone, and enter your PIN there if it asks.`,
+  owner: () => "Thurea is in charge of the phone. Signing your accounts back in…",
+  "owner-failed": d => `Thurea couldn't take charge (${d}). Signing your accounts back in.`,
+  signin: d => `Signing back in to ${d}: enter your password or use your passkey on the phone.`,
+  "signin-samsung": d => `Add account is open on the phone: sign back in to your Samsung account (${d}).`,
+  signedin: d => `${d} is back.`, "signin-later": d => `${d} isn't back yet: add it later in Settings → Accounts.`,
+  apps: d => `Open these apps once to sign back in: ${d}`,
+  done: d => d === "updated" ? "Thurea was already in charge of this phone. It's updated." : "All done. Thurea is in charge, your accounts are back, and Wireless debugging is off again." };
+let mode = "reset";
+function pollPhone() {
+  if (!phoneOn) return;
+  api("phone").then(ph => {
+    if (ph.error) { $("qr").textContent = ""; $("phone-progress").textContent = ph.error; }
+    else if (ph.rows && ph.rows.length && !$("qr").firstChild) $("qr").innerHTML = qrSvg(ph.rows);   // rows are 0/1 only (checked by the tray)
+    if (ph.event && ["connected", "phone", "installing", "installed"].includes(ph.event[0])) $("qr").hidden = true;
+    if (!ph.error) $("phone-progress").textContent = ph.event ? (events[ph.event[0]] || (() => ""))(ph.event[1] || "") : (ph.ready ? "Waiting for the phone… (same network as this computer)" : "Preparing the setup code…");
+    $("phone-note").textContent = mode === "keep" ? "" : ph.ready ? (ph.household ? "This code holds your household key: don't photograph or share it."
+      : "The phone is protected on its own (no household on this computer).") + (ph.wifi ? ` It joins Wi-Fi “${ph.wifi}”.` : "") : "";
+  }).catch(() => {}).finally(() => setTimeout(pollPhone, 1000));
+}
+function startPhone() {
+  phoneOn = true; $("phone").hidden = false; $("qr").textContent = ""; $("qr").hidden = false; $("phone-progress").textContent = "Preparing the setup code…";
+  for (const m of ["reset", "keep"]) { $(`mode-${m}`).className = m === mode ? "primary" : ""; $(`steps-${m}`).hidden = m !== mode; }
+  $("wifi-row").hidden = mode === "keep";
+  api(`phone/start?wifi=${$("wifi").checked ? 1 : 0}&mode=${mode}`, { method: "POST" }).then(pollPhone);
+  $("phone").scrollIntoView({ behavior: "smooth" });
+}
+function stopPhone() { phoneOn = false; $("phone").hidden = true; navigator.sendBeacon(`/${T}/api/phone/stop`); }
+
+function showSettings(open) {
+  if (open && phoneOn) stopPhone();
+  $("home").hidden = open;
+  $("settings").hidden = !open;
+  $(open ? "settings-back" : "gear").focus();
+}
+$("gear").onclick = () => showSettings(true);
+$("settings-back").onclick = () => showSettings(false);
+addEventListener("keydown", event => {
+  if (event.key === "Escape" && !$("settings").hidden) showSettings(false);
+});
+
+$("phone-btn").onclick = startPhone;
+$("phone-close").onclick = stopPhone;
+for (const m of ["reset", "keep"]) $(`mode-${m}`).onclick = () => { mode = m; startPhone(); };
+$("wifi").onchange = () => { if (phoneOn) startPhone(); };
+$("reapply").onclick = () => { $("action").textContent = "Re-applying…"; api("reapply", { method: "POST" }).then(r => { $("action").textContent = r.ok ? "Protection re-applied." : "Couldn't re-apply (not authorised?). Thurea re-applies by itself every 5 minutes."; refresh(); }); };
+for (const k of ["verses", "animation"]) $(`p-${k}`).onchange = e => api(`prefs?${k}=${e.target.checked ? "on" : "off"}`, { method: "POST" }).then(refresh);
+addEventListener("pagehide", () => { if (phoneOn) navigator.sendBeacon(`/${T}/api/phone/stop`); });
+if (location.hash === "#phone") startPhone();
+if (location.hash === "#keep") { mode = "keep"; startPhone(); }
+refresh(); setInterval(refresh, 30000);
+</script>
+</body>
+</html>

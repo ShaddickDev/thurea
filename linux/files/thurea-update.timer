@@ -1,0 +1,11 @@
+[Unit]
+Description=Thurea: check GitHub for a newer Thurea every hour
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

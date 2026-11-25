@@ -1,0 +1,9 @@
+[Unit]
+Description=Thurea: check every 5 minutes
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

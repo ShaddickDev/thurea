@@ -1,0 +1,34 @@
+#!/bin/bash
+# PID 1 of a lab VM. Settings arrive on the kernel command line:
+#   thurea.name=Laptop thurea.key=<hex> thurea.peers=10.0.2.2:47902,10.0.2.2:47903
+#   thurea.block_at=40:lab-test-site.example  (optional: block a site 40 s after boot)
+export PATH=/bin
+mount -t proc proc /proc; mount -t sysfs sys /sys; mount -t devtmpfs dev /dev
+mount -t tmpfs tmp /tmp; mount -t tmpfs run /run
+for m in failover net_failover virtio_net; do insmod /mod/$m.ko; done
+arg() { tr ' ' '\n' < /proc/cmdline | sed -n "s/^thurea\.$1=//p"; }
+NAME=$(arg name); KEY=$(arg key); PEERS=$(arg peers); BLOCK=$(arg block_at)
+
+ip link set lo up
+ip link set eth0 up
+ip addr add 10.0.2.15/24 dev eth0
+ip route add default via 10.0.2.2
+echo "lab: $NAME up, peers $PEERS"
+
+mkdir -p /etc/thurea /var/lib/thurea
+P=$(printf '%s' "$PEERS" | sed 's/[^,][^,]*/"&"/g')
+printf '{"id":"%s","name":"%s","key":"%s","peers":[%s],"port":47823,"lan_broadcast":false}\n' \
+  "$(echo "$NAME" | tr 'A-Z' 'a-z')" "$NAME" "$KEY" "$P" > /etc/thurea/config.json
+chmod 600 /etc/thurea/config.json
+
+thurea run > /dev/console 2>&1 &
+
+if [ -n "$BLOCK" ]; then
+  ( sleep "${BLOCK%%:*}"; echo "lab: $NAME blocks ${BLOCK#*:}"; thurea block "${BLOCK#*:}" ) &
+fi
+# Show this VM's view of the household every 20 s.
+while true; do
+  sleep 20
+  echo "=== $NAME $(date +%T) ==="; thurea status 2>&1; echo "=== end ==="
+  grep -c 'lab-test-site' /etc/hosts | sed 's/^/lab: hosts entries for lab-test-site: /'
+done
