@@ -251,3 +251,50 @@ pub fn start_mesh_service() -> String {
         Err(_) => "Next: thurea install (runs Thurea at startup)".into(),
     }
 }
+
+// ── Children's accounts (Thurea family) ──
+
+pub fn accounts() -> Vec<String> {
+    powershell("Get-LocalUser | Where-Object Enabled | ForEach-Object { $_.Name }")
+        .unwrap_or_default()
+        .lines()
+        .map(|l| l.trim().to_ascii_lowercase())
+        .filter(|l| !l.is_empty() && !matches!(l.as_str(), "administrator" | "guest" | "defaultaccount" | "wdagutilityaccount"))
+        .collect()
+}
+
+pub fn sessions() -> Vec<thurea_core::desktop::Session> {
+    // `query user` exits 1 when nobody is logged in.
+    let out = std::process::Command::new("query").arg("user").output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+    thurea_core::desktop::parse_query_user(&out)
+}
+
+pub fn running(user: &str) -> Vec<(String, String)> {
+    run("tasklist", &["/FI", &format!("USERNAME eq {user}"), "/FO", "CSV", "/NH"])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split("\",\"").collect();
+            Some((f.get(1)?.to_string(), f.first()?.trim_start_matches('"').to_string()))
+        })
+        .collect()
+}
+
+pub fn close(user: &str, program: &str) {
+    let _ = run("taskkill", &["/F", "/FI", &format!("USERNAME eq {user}"), "/IM", program]);
+}
+
+/// Disconnecting a session shows the lock screen (the user signs in again to continue).
+pub fn lock_session(id: &str) {
+    let _ = run("tsdiscon", &[id]);
+}
+
+pub fn is_admin_account(user: &str) -> bool {
+    run("net", &["localgroup", "Administrators"]).unwrap_or_default().lines().any(|l| l.trim().eq_ignore_ascii_case(user))
+}
+
+pub fn local_clock() -> Option<(String, u16)> {
+    let out = powershell("Get-Date -Format 'yyyy-MM-dd HH mm'").ok()?;
+    let f: Vec<&str> = out.split_whitespace().collect();
+    Some((f.first()?.to_string(), f.get(1)?.parse::<u16>().ok()? * 60 + f.get(2)?.parse::<u16>().ok()?))
+}

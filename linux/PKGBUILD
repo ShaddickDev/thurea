@@ -22,6 +22,7 @@ package() {
   install -Dm755 deny-remove    "$pkgdir/usr/lib/thurea/deny-remove"
   install -Dm755 deny-install   "$pkgdir/usr/lib/thurea/deny-install"
   install -Dm755 thurea-omarchy "$pkgdir/usr/lib/thurea/thurea-omarchy"
+  install -Dm755 thurea-family-host "$pkgdir/usr/lib/thurea/thurea-family-host"
   install -Dm644 thurea-tray.desktop "$pkgdir/etc/xdg/autostart/thurea-tray.desktop"
   install -dm755 "$pkgdir/usr/bin"
   ln -s /usr/lib/thurea/thurea-update "$pkgdir/usr/bin/thurea-update"
@@ -47,5 +48,13 @@ package() {
     install -Dm644 "$f" "$pkgdir/usr/share/thurea/$f"
   done
   install -Dm644 thurea.crx  "$pkgdir/usr/share/thurea/web/thurea.crx"
+  # The extension's family helper, for every Chromium-family browser.
+  local host
+  host=$(printf '{"name":"com.thurea.family","description":"Thurea family helper","path":"/usr/lib/thurea/thurea-family-host","type":"stdio","allowed_origins":["chrome-extension://%s/"]}' "$(cat extension-id)")
+  for d in etc/chromium/native-messaging-hosts etc/opt/chrome/native-messaging-hosts etc/opt/edge/native-messaging-hosts etc/brave/native-messaging-hosts; do
+    install -dm755 "$pkgdir/$d"
+    printf '%s\n' "$host" > "$pkgdir/$d/com.thurea.family.json"
+    chmod 644 "$pkgdir/$d/com.thurea.family.json"
+  done
   install -Dm644 updates.xml "$pkgdir/usr/share/thurea/web/updates.xml"
 }

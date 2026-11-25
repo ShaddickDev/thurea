@@ -37,6 +37,9 @@ pub struct Heartbeat {
     pub overall: State,
     /// Only the checks that are not Ok (keeps packets small).
     pub problems: Vec<Check>,
+    /// A computer's user accounts, so parents can mark a child's.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub accounts: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -327,8 +330,10 @@ impl Mesh {
                 }
             }
             Body::Usage(u) => {
-                // Only a child's device, about itself.
-                if u.device == peer.id && policy.family.child_of(&u.device).is_some() {
+                // Only a child's device (or a computer with that child's account), about itself.
+                let childs = policy.family.child_of(&u.device).is_some_and(|(c, _)| c == u.child)
+                    || policy.family.devices.get(&u.device).is_some_and(|d| d.accounts.values().any(|c| *c == u.child));
+                if u.device == peer.id && childs {
                     ev.push(Event::Usage { report: u });
                 }
             }
@@ -382,6 +387,7 @@ mod tests {
             policy_digest: if version == 1 { Policy::default().digest() } else { String::new() },
             overall,
             problems: if overall == State::Ok { vec![] } else { vec![Check::degraded("dns", "DNS is 8.8.8.8")] },
+            accounts: Vec::new(),
         })
     }
 

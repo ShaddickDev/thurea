@@ -10,7 +10,7 @@ self.addEventListener("unhandledrejection", e => thureaError("promise", e.reason
 chrome.storage.local.set({ bgStarted: Date.now() });
 
 // Userscript loader (scripts manager) lives in its own file.
-importScripts("userscripts-lib.js", "userscripts-bg.js", "filterlists.js", "vault.js", "randomgroup.js", "omarchy.js", "vpnguard.js", "extras-bg.js", "mixer-bg.js", "pornblock-bg.js");
+importScripts("userscripts-lib.js", "userscripts-bg.js", "filterlists.js", "vault.js", "randomgroup.js", "omarchy.js", "vpnguard.js", "extras-bg.js", "mixer-bg.js", "pornblock-bg.js", "family.js");
 
 // No number on the toolbar icon (the blocked count is shown in the popup).
 chrome.declarativeNetRequest.setExtensionActionOptions({ displayActionCountAsBadgeText: false }).catch(() => {});

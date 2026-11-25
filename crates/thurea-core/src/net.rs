@@ -30,6 +30,8 @@ pub struct NodeConfig {
     pub silent_after: u64,
     /// Relay to use instead of the policy's ("host:port").
     pub relay: Option<String>,
+    /// This computer's user accounts (sent with heartbeats; at most 12).
+    pub accounts: Vec<String>,
 }
 
 impl NodeConfig {
@@ -46,6 +48,7 @@ impl NodeConfig {
             bind: std::net::IpAddr::from([0, 0, 0, 0]),
             silent_after: mesh::SILENT_AFTER,
             relay: None,
+            accounts: Vec::new(),
         }
     }
 }
@@ -108,6 +111,7 @@ pub fn heartbeat(cfg: &NodeConfig, report: &Report, policy: &Policy) -> Body {
                 c
             })
             .collect(),
+        accounts: cfg.accounts.iter().take(12).cloned().collect(),
     })
 }
 

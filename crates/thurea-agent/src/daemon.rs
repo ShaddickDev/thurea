@@ -16,6 +16,7 @@ const REAPPLY_EVERY: Duration = Duration::from_secs(60);
 #[derive(Serialize, Clone)]
 struct PeerState {
     id: String,
+    accounts: Vec<String>,
     name: String,
     platform: String,
     state: State,
@@ -50,6 +51,11 @@ struct Desktop {
     mesh_only: bool,
     /// This computer asking to become a parent's (from `thurea family join`).
     asks: Vec<Request>,
+    /// Children's accounts on this computer: when last looked at, reports for the parents,
+    /// problems (an administrator account can't be held).
+    accounts_at: Option<Instant>,
+    usage_out: Vec<thurea_core::screen::UsageReport>,
+    account_problems: Vec<String>,
 }
 
 impl Desktop {
@@ -142,6 +148,9 @@ impl Host for Desktop {
         if self.applied_at.map_or(true, |t| t.elapsed() >= REAPPLY_EVERY) {
             let before = self.report.overall();
             self.report = if self.mesh_only { Self::mesh_only_report() } else { platform::apply(&self.policy) };
+            for (i, p) in self.account_problems.iter().enumerate() {
+                self.report.push(thurea_core::Check::degraded(&format!("child-account{i}"), p));
+            }
             self.applied_at = Some(Instant::now());
             let now = self.report.overall();
             if now != State::Ok && before == State::Ok {
@@ -198,11 +207,30 @@ impl Host for Desktop {
     fn outgoing(&mut self) -> Vec<Body> {
         let f = &self.policy.family;
         self.asks.retain(|r| !f.decided(r));
-        self.asks.iter().cloned().map(Body::Request).collect()
+        let mut out: Vec<Body> = self.asks.iter().cloned().map(Body::Request).collect();
+        out.extend(self.usage_out.drain(..).map(Body::Usage));
+        out
     }
 
     fn tick(&mut self) -> bool {
-        self.take_submissions()
+        let changed = self.take_submissions();
+        // Children's accounts: once a minute.
+        if self.accounts_at.map_or(true, |t| t.elapsed() >= Duration::from_secs(60)) {
+            self.accounts_at = Some(Instant::now());
+            let (reports, done, problems) = crate::accounts::tick(&self.cfg.id, &self.policy, true);
+            for d in done {
+                eprintln!("thurea: {d}");
+            }
+            if problems != self.account_problems {
+                self.account_problems = problems;
+                self.applied_at = None;
+            }
+            self.usage_out = reports;
+            for r in &self.usage_out {
+                crate::family::save_usage(r); // a parent on this same computer sees it too
+            }
+        }
+        changed
     }
 
     fn on_peers(&mut self, mesh: &Mesh) {
@@ -210,6 +238,7 @@ impl Host for Desktop {
             .peers()
             .map(|p| PeerState {
                 id: p.id.clone(),
+                accounts: p.heartbeat.as_ref().map(|h| h.accounts.clone()).unwrap_or_default(),
                 name: p.name(),
                 platform: p.heartbeat.as_ref().map(|h| h.platform.clone()).unwrap_or_default(),
                 state: p.state(),
@@ -233,6 +262,7 @@ pub fn run(mesh_only: bool) -> Result<(), String> {
     node.peers = cfg.peers.clone();
     node.broadcast = cfg.lan_broadcast;
     node.relay = cfg.relay.clone();
+    node.accounts = platform::accounts();
     let mut host = Desktop {
         cfg,
         policy: Policy::default(),
@@ -244,6 +274,9 @@ pub fn run(mesh_only: bool) -> Result<(), String> {
         household: "1 of 1 devices".into(),
         mesh_only,
         asks: std::fs::read_to_string(config::state_dir().join("asks.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default(),
+        accounts_at: None,
+        usage_out: Vec::new(),
+        account_problems: Vec::new(),
     };
     host.reload_policy_if_changed();
     eprintln!("thurea: running as {} (policy v{}), mesh on UDP {}", host.cfg.name, host.policy.version, node.port);

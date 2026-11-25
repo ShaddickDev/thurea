@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Thurea \u2013 Ad Blocker & Video Downloader",
+  "name": "Thurea – Ad Blocker & Video Downloader",
   "version": "2.4.7",
   "description": "Blocks ads and trackers (including YouTube), pop-unders, redirects, click-hijacks and cookie banners; downloads videos; skips YouTube sponsors; runs userscripts. Includes Omarchy's Copy URL, Download Video and WhatsApp Slim.",
   "permissions": [
@@ -399,7 +399,7 @@
   "storage": {
     "managed_schema": "managed_schema.json"
   },
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArVmElwi1U9EUkgOr4VGbk1rdMxjGfphnhzhxJgXfOtr/baAHSxhvmHH5qfyqqOW/KAdsEdUm0R7KfAOwpBjPgXNN9PhgJ5qJZ54ZiOzsQ8dp7SwvDrXyL++m5/9Jm9QJTuVsPScALzqVlWajoSQVGEk7dgjC/jaPP3STdKcVIUjNAM4NM9Ksr5AZJemR5ImQnCE1hodNJeEgX7vkIQYVjPEqGnPpFyJYgfwELokRZXf6uy1F8Bkl3O25UjxNYo4K3hBHGI/eN4Toqsje1UxsL3XjxDnGrdOTQRVr8j38U5eoHeU8lfCIyZhJGxNCl1P3EeNYSnstU56q7sTafkUvEwIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtRh4OjwewJoS2OmJRtw0k2p8mY6E0YHoQ9ZXOVE/H5IREuefsWUrxpmtG1uNx9ZlgBmPPFPg/JeS8Xv2y0RNnLvs/YT7Jhl4VPZb2yMBkVKhKhbWJrh7KEy2RBHJvNIQZngQzMT33zFb38z+bzTNQSWRHg33Y44J6BlyoxjYzBQPi3UkBO2pySTZ4XJZNl668xVeaD5elnqhBSE46t0/ta7NKF6E+NjKov3mv+XA/ITNJOL1aiJRC8DJtDmdWu15e4yRvXbSWeHLbqzGg7MAzWF0F3w1CvcH1yg02Is8Qrvm6PeCsXmcvk/NVB+rQNPonEnQR1UvxJi0E1JxWz5WoQIDAQAB",
   "update_url": "http://127.0.0.1:8137/updates.xml",
   "icons": {
     "16": "icons/icon16.png",

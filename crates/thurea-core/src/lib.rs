@@ -4,6 +4,7 @@
 //! * [`policy`]  — the one family policy every device enforces (DNS, blocklist, app rules),
 //!                 signed by a parent once there is a family.
 //! * [`family`]  — parents, children's devices, children's rules, the app/site catalog.
+//! * [`desktop`] — children's accounts on shared computers: programs, sessions, sites.
 //! * [`matcher`] — "is this site blocked?", with subdomains.
 //! * [`status`]  — protection checks. Missing evidence is `Unknown`, never `Ok`.
 //! * [`mesh`]    — authenticated heartbeats between the household's devices, policy sync,
@@ -17,6 +18,7 @@
 
 pub mod bend;
 pub mod crypto;
+pub mod desktop;
 pub mod family;
 pub mod matcher;
 pub mod mesh;

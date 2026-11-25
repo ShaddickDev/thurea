@@ -42,6 +42,8 @@ final class Native {
     static native String familyAnswer(String requestId, boolean approve, int minutes);
     static native String familyCategory(String child, String category, boolean allowed);
     static native String familyRevoke(String child, String item);
+    /** A user account on a household computer: a child's (child name) or an adult's (""). */
+    static native String familyAccount(String device, String name, String user, String child);
     /** Ask the family's parents to make this phone a parent's (shows a match code). */
     static native String familyJoin(String name);
     /** The household's self-hosted relay ("host:port"; "" = none). Parents only. */

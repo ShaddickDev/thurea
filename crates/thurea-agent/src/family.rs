@@ -30,6 +30,9 @@ pub const HELP: &str = "\
                                    Screen time, e.g. daily 90 · bedtime 21:00-07:00 · pause 60 ·
                                    lock · extra 30 · limit social 30 · always org.school.app on
   thurea family code CHILD MIN     Offline code for 15/30/60/120 extra minutes today (as admin)
+  thurea family account DEVICE USER CHILD|-
+                                   Make a user account on a household computer a child's (- : an adult's)
+  thurea family check              What Thurea does for children's accounts here (changes nothing)
   thurea family relay HOST:PORT|off
                                    The household's own relay, to reach each other from anywhere
   thurea relay [--port N]          Run a relay (on a server with a public UDP port)";
@@ -117,7 +120,7 @@ fn usage_path() -> PathBuf {
 pub fn save_usage(r: &thurea_core::screen::UsageReport) {
     let mut all: std::collections::BTreeMap<String, thurea_core::screen::UsageReport> =
         std::fs::read_to_string(usage_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    all.insert(r.device.clone(), r.clone());
+    all.insert(format!("{}/{}", r.device, r.child), r.clone());
     let _ = std::fs::write(usage_path(), serde_json::to_string(&all).unwrap());
 }
 
@@ -306,6 +309,8 @@ pub fn json() -> Value {
         "inbox": inbox,
         "relay": p.relay,
         "version": p.version,
+        "my_accounts": crate::platform::accounts(),
+        "my_platform": crate::platform::PLATFORM,
     })
 }
 
@@ -348,6 +353,34 @@ pub fn run(args: &[String]) -> Result<String, String> {
             })
         }
         "relay" => relay(&a(2, "HOST:PORT|off")?),
+        "account" => {
+            let (dev, user, child) = (a(2, "DEVICE USER CHILD|-")?, a(3, "DEVICE USER CHILD|-")?, a(4, "DEVICE USER CHILD|-")?);
+            account(&dev, &user, &child)
+        }
+        "check" => {
+            let state: Value = std::fs::read_to_string(config::state_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+            let id = state["id"].as_str().map(String::from).or_else(|| config::Config::load().ok().map(|c| c.id)).ok_or("this computer isn't in a household")?;
+            let p = current_policy();
+            let mapped = thurea_core::desktop::child_accounts(&p, &id);
+            if mapped.is_empty() {
+                return Ok("No children's accounts on this computer.".into());
+            }
+            let (reports, done, problems) = crate::accounts::tick(&id, &p, false);
+            let mut out = String::new();
+            for (u, c) in mapped {
+                out += &format!("{u}: {c}'s account\n");
+            }
+            for r in reports {
+                out += &format!("  {} today: {} min{}\n", r.child, r.used, r.allowed.map_or(String::new(), |a| format!(" of {a}")));
+            }
+            for d in done {
+                out += &format!("  would {d}\n");
+            }
+            for p in problems {
+                out += &format!("  ! {p}\n");
+            }
+            Ok(out)
+        }
         "screen" => {
             let (child, what) = (a(2, "CHILD WHAT [A] [B]")?, a(3, "CHILD WHAT [A] [B]")?);
             screen(&child, &what, args.get(4).map(String::as_str).unwrap_or(""), args.get(5).map(String::as_str).unwrap_or(""))
@@ -371,6 +404,51 @@ pub fn run(args: &[String]) -> Result<String, String> {
     }
 }
 
+/// The browser extension's helper (native messaging, runs as the signed-in user): answers one
+/// message with this account's rules — {"child": name or null, "blocked_sites", "youtube_restrict"}.
+pub fn host() -> Result<String, String> {
+    use std::io::{Read, Write};
+    let mut len = [0u8; 4];
+    let mut stdin = std::io::stdin();
+    if stdin.read_exact(&mut len).is_ok() {
+        let n = u32::from_le_bytes(len).min(64 * 1024) as usize;
+        let mut msg = vec![0u8; n];
+        let _ = stdin.read_exact(&mut msg);
+    }
+    let reply = host_reply(&current_user()).to_string();
+    let mut out = std::io::stdout();
+    let _ = out.write_all(&(reply.len() as u32).to_le_bytes());
+    let _ = out.write_all(reply.as_bytes());
+    let _ = out.flush();
+    Ok(String::new())
+}
+
+fn current_user() -> String {
+    let u = std::env::var(if cfg!(windows) { "USERNAME" } else { "USER" }).unwrap_or_default();
+    if !u.is_empty() {
+        return u;
+    }
+    std::process::Command::new("whoami").output().map(|o| String::from_utf8_lossy(&o.stdout).trim().rsplit('\\').next().unwrap_or("").to_string()).unwrap_or_default()
+}
+
+pub fn host_reply(user: &str) -> Value {
+    let state: Value = std::fs::read_to_string(config::state_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let Some(device) = state["id"].as_str() else { return json!({ "child": null }) };
+    let plan = thurea_core::desktop::desktop_plan(&current_policy(), device, user, &[], &thurea_core::screen::Used::new(), None, 0);
+    match plan.child {
+        None => json!({ "child": null }),
+        Some(c) => json!({ "child": c, "blocked_sites": plan.blocked_sites, "youtube_restrict": plan.youtube_restrict }),
+    }
+}
+
+/// Marks a user account on a household computer as a child's ("-" / "": an adult's).
+pub fn account(device: &str, user: &str, child: &str) -> Result<String, String> {
+    let name = device_name(device);
+    let (device, user) = (device.to_string(), user.to_string());
+    let child = Some(child.trim().to_string()).filter(|c| !c.is_empty() && c != "-");
+    change(move |p| p.family.set_account(&device, &name, &user, child.as_deref()))
+}
+
 pub fn category(child: &str, cat: &str, allow: bool) -> Result<String, String> {
     if !matches!(cat, "social" | "messaging") {
         return Err("category must be social or messaging".into());
@@ -390,11 +468,13 @@ pub fn relay(addr: &str) -> Result<String, String> {
 
 /// A device's name from the service's household view, if known.
 pub fn device_name(id: &str) -> String {
-    std::fs::read_to_string(config::state_path())
-        .ok()
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| v["peers"].as_array().and_then(|a| a.iter().find(|p| p["id"] == id).and_then(|p| p["name"].as_str().map(String::from))))
-        .unwrap_or_else(|| id.to_string())
+    let v: Value = std::fs::read_to_string(config::state_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    if v["id"] == id {
+        if let Some(n) = v["name"].as_str() {
+            return n.to_string(); // this computer
+        }
+    }
+    v["peers"].as_array().and_then(|a| a.iter().find(|p| p["id"] == id).and_then(|p| p["name"].as_str().map(String::from))).unwrap_or_else(|| id.to_string())
 }
 
 fn status() -> String {

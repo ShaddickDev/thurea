@@ -489,6 +489,23 @@ function Set-StartMenu {
     }
 }
 
+# The browser extension's family helper (native messaging): tells the extension whether the
+# signed-in account is a child's. Registered for Chrome, Chromium, Edge and Brave.
+function Set-FamilyHost {
+    $cmd = Join-Path $Home_ 'family-host.cmd'
+    Set-Content -Path $cmd -Value "@`"%~dp0thurea.exe`" family-host %*" -Encoding ASCII
+    $id = (Get-Content (Join-Path $Home_ 'data\extension-id') -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if (-not $id) { return }
+    $json = Join-Path $Home_ 'family-host.json'
+    $m = @{ name = 'com.thurea.family'; description = 'Thurea family helper'; path = $cmd; type = 'stdio'; allowed_origins = @("chrome-extension://$($id.Trim())/") } | ConvertTo-Json
+    Set-Content -Path $json -Value $m -Encoding UTF8
+    foreach ($b in 'Google\Chrome', 'Chromium', 'Microsoft\Edge', 'BraveSoftware\Brave-Browser') {
+        $k = "HKLM:\SOFTWARE\$b\NativeMessagingHosts\com.thurea.family"
+        New-Item -Path $k -Force | Out-Null
+        Set-ItemProperty -Path $k -Name '(default)' -Value $json
+    }
+}
+
 function Register-Tasks {
     $ps = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $me = Join-Path $Home_ 'Thurea.ps1'
@@ -555,6 +572,7 @@ function Invoke-Install {
     New-Item -ItemType Directory -Force -Path $State | Out-Null
     Set-FolderAcl $State 'O:BAG:SYD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)'
 
+    Set-FamilyHost
     Register-Tasks
     Start-ScheduledTask -TaskPath '\Thurea\' -TaskName 'Thurea Extensions'
 

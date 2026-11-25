@@ -193,11 +193,13 @@ public class PageActivity extends Activity {
         LinearLayout dl = Ui.list(this);
         org.json.JSONObject devices = f.optJSONObject("devices");
         List<String[]> all = new ArrayList<>();       // id, name, platform
+        java.util.Map<String, org.json.JSONArray> peerAccounts = new java.util.HashMap<>();
         try {
             org.json.JSONArray peers = new org.json.JSONObject(Native.household()).optJSONArray("peers");
             for (int i = 0; peers != null && i < peers.length(); i++) {
                 org.json.JSONObject p = peers.optJSONObject(i);
                 all.add(new String[]{ p.optString("id"), p.optString("name"), p.optString("platform") });
+                if (p.optJSONArray("accounts") != null) peerAccounts.put(p.optString("id"), p.optJSONArray("accounts"));
             }
         } catch (Exception ignored) {}
         for (java.util.Iterator<String> it = devices == null ? java.util.Collections.<String>emptyIterator() : devices.keys(); it.hasNext(); ) {
@@ -221,6 +223,23 @@ public class PageActivity extends Activity {
                         else ask("Whose device?", "Child's name", isChild ? entry.optString("child") : "",
                             child -> { if (!child.isEmpty()) famDo(() -> Native.familySetRole(d[0], d[1], "child", child)); });
                     }).show()));
+            // A shared computer: which of its accounts are a child's.
+            java.util.Set<String> users = new java.util.TreeSet<>();
+            org.json.JSONArray pa = peerAccounts.get(d[0]);
+            for (int i = 0; pa != null && i < pa.length(); i++) users.add(pa.optString(i));
+            org.json.JSONObject mapped = entry == null ? null : entry.optJSONObject("accounts");
+            for (java.util.Iterator<String> it = mapped == null ? java.util.Collections.<String>emptyIterator() : mapped.keys(); it.hasNext(); ) users.add(it.next());
+            for (String u : users) {
+                String owner = mapped == null ? "" : mapped.optString(u, "");
+                dl.addView(Ui.divider(this));
+                dl.addView(Ui.row(this, "👤", "   " + u + " (account on " + d[1] + ")",
+                    owner.isEmpty() ? "An adult's account · tap to change" : owner + "'s account · tap to change", () ->
+                    new AlertDialog.Builder(this).setTitle("Account " + u)
+                        .setItems(new String[]{ "A child's account…", "An adult's account" }, (dd, w) -> {
+                            if (w == 1) famDo(() -> Native.familyAccount(d[0], d[1], u, ""));
+                            else ask("Whose account?", "Child's name", owner, child -> { if (!child.isEmpty()) famDo(() -> Native.familyAccount(d[0], d[1], u, child)); });
+                        }).show()));
+            }
         }
         col.addView(dl);
         // Reach the family from anywhere: the household's own relay.

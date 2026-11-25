@@ -232,24 +232,42 @@ function render() {
 
   // Devices.
   const devs = new Map();
-  for (const p of s.peers || []) devs.set(p.id, { name: p.name, platform: p.platform, online: true });
+  if (s.this_device) devs.set(s.this_device, { name: `${s.computer || "This computer"} (this computer)`, platform: s.my_platform, online: true, accounts: s.my_accounts || [] });
+  for (const p of s.peers || []) devs.set(p.id, { name: p.name, platform: p.platform, online: true, accounts: p.accounts || [] });
   for (const [id, d] of Object.entries(s.devices || {})) if (!devs.has(id)) devs.set(id, { name: d.name, platform: "offline", online: false });
   const dl = $(`<div class="list"></div>`);
   if (!devs.size) dl.append(row("…", "No other devices seen yet", "Devices appear here when they're on the same network or the relay"));
   for (const [id, d] of devs) {
     const entry = (s.devices || {})[id];
     const child = entry && entry.role === "child" ? entry.child : null;
-    const sub = `${child ? esc(child) + "'s device" : "Adult's device"} · ${esc(d.platform)}`;
+    const kind = child ? esc(child) + "'s device" : (d.platform === "android" || d.platform === "offline") ? "Adult's device" : "Household computer — mark children's accounts below";
+    const sub = `${kind} · ${esc(d.platform)}`;
     const r = row(child ? "🧒" : "🧑", esc(d.name), sub);
     const acts = r.querySelector(".actions");
     if (child) acts.append(btn("Make it an adult's", "", () => act({ action: "role", device: id, role: "adult" })));
-    else {
+    else if (d.platform === "android" || (d.platform === "offline" && !(entry && entry.accounts && Object.keys(entry.accounts).length))) {
       const box = $(`<div class="inline" style="margin:0"><input type="text" placeholder="Child's name" aria-label="Child's name for ${esc(d.name)}" maxlength="40" style="width:140px"></div>`);
       const input = box.querySelector("input");
       box.append(btn("Child's device", "", () => input.value.trim() && act({ action: "role", device: id, role: "child", child: input.value.trim() })));
       acts.append(box);
     }
     dl.append(r);
+    // A shared computer: which of its accounts are a child's.
+    const accounts = new Set([...(d.accounts || []), ...Object.keys((entry && entry.accounts) || {})]);
+    for (const u of accounts) {
+      const owner = entry && entry.accounts && entry.accounts[u];
+      const ar = row("👤", `${esc(u)} <span class="pill">account</span>`, owner ? `${esc(owner)}'s account — programs, sites and screen time follow ${esc(owner)}'s rules` : "An adult's account");
+      const aa = ar.querySelector(".actions");
+      if (owner) aa.append(btn("Make it an adult's", "", () => act({ action: "account", device: id, user: u, child: "" })));
+      else {
+        const box = $(`<div class="inline" style="margin:0"><input type="text" placeholder="Child's name" aria-label="Child's name for account ${esc(u)}" maxlength="40" style="width:140px"></div>`);
+        const input = box.querySelector("input");
+        box.append(btn("Child's account", "", () => input.value.trim() && act({ action: "account", device: id, user: u, child: input.value.trim() })));
+        aa.append(box);
+      }
+      ar.style.paddingLeft = "48px";
+      dl.append(ar);
+    }
   }
   section("Devices", dl);
 

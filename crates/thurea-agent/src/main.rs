@@ -1,5 +1,6 @@
 //! `thurea` — family protection for Linux and Windows, in step with Thurea on Android.
 
+mod accounts;
 mod adopt;
 mod config;
 mod daemon;
@@ -216,6 +217,8 @@ fn dispatch(args: &[String]) -> Result<String, String> {
             daemon::run(args.iter().any(|a| a == "--mesh-only")).map(|_| String::new())
         }
         "family" => family::run(args),
+        // Chrome starts this as the browser extension's helper; nothing else may print.
+        "family-host" => family::host(),
         "control-center" => control::run(),
         "relay" => {
             let port: u16 = flag(args, "--port").map(|p| p.parse().map_err(|_| "port must be a number")).transpose()?.unwrap_or(thurea_core::relay::PORT);

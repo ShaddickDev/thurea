@@ -58,6 +58,9 @@ pub struct Device {
     /// The child this device belongs to (role Child).
     #[serde(default)]
     pub child: Option<String>,
+    /// On a shared computer: user accounts (lower case) that are a child's → the child.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub accounts: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -382,15 +385,51 @@ impl Family {
         }
     }
 
+    /// The child a user account on a shared computer belongs to, with their rules.
+    pub fn child_of_account(&self, device: &str, user: &str) -> Option<(String, ChildRules)> {
+        let child = self.devices.get(device)?.accounts.get(&user.to_ascii_lowercase())?.clone();
+        let rules = self.children.get(&child).cloned().unwrap_or_default();
+        Some((child, rules))
+    }
+
+    /// Marks a user account on a computer as a child's (`child` None: an adult's again). The
+    /// computer itself stays an adult's device.
+    pub fn set_account(&mut self, device: &str, name: &str, user: &str, child: Option<&str>) {
+        let user = user.trim().to_ascii_lowercase();
+        match child.map(str::trim).filter(|c| !c.is_empty()) {
+            Some(c) => {
+                self.children.entry(c.to_string()).or_default();
+                let d = self.devices.entry(device.into()).or_insert_with(|| Device { name: name.into(), role: Role::Adult, child: None, accounts: BTreeMap::new() });
+                d.accounts.insert(user, c.to_string());
+            }
+            None => {
+                if let Some(d) = self.devices.get_mut(device) {
+                    d.accounts.remove(&user);
+                    if d.role == Role::Adult && d.accounts.is_empty() {
+                        self.devices.remove(device);
+                    }
+                }
+            }
+        }
+    }
+
     /// Makes a device a child's (creating the child's rules if needed) or an adult's.
     pub fn set_role(&mut self, device: &str, name: &str, role: Role, child: Option<&str>) {
         if role == Role::Adult {
-            self.devices.remove(device);
+            // Keep its child accounts (a shared computer); drop it if there's nothing left.
+            if let Some(d) = self.devices.get_mut(device) {
+                d.role = Role::Adult;
+                d.child = None;
+                if d.accounts.is_empty() {
+                    self.devices.remove(device);
+                }
+            }
             return;
         }
         let child = child.unwrap_or(name).to_string();
         self.children.entry(child.clone()).or_default();
-        self.devices.insert(device.into(), Device { name: name.into(), role, child: Some(child) });
+        let accounts = self.devices.get(device).map(|d| d.accounts.clone()).unwrap_or_default();
+        self.devices.insert(device.into(), Device { name: name.into(), role, child: Some(child), accounts });
     }
 }
 

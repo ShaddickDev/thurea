@@ -299,3 +299,60 @@ pub fn start_mesh_service() -> String {
         "Next: sudo thurea install (runs Thurea at startup)".into()
     }
 }
+
+// ── Children's accounts (Thurea family) ──
+
+/// People's accounts on this computer.
+pub fn accounts() -> Vec<String> {
+    thurea_core::desktop::parse_passwd(&std::fs::read_to_string("/etc/passwd").unwrap_or_default())
+}
+
+/// Login sessions and whether each is in use right now.
+pub fn sessions() -> Vec<thurea_core::desktop::Session> {
+    let list = run("loginctl", &["list-sessions", "--no-legend"]).unwrap_or_default();
+    thurea_core::desktop::parse_loginctl_sessions(&list)
+        .into_iter()
+        .map(|(id, user)| {
+            let show = run("loginctl", &["show-session", &id, "-p", "Active", "-p", "LockedHint", "-p", "IdleHint", "-p", "Class"]).unwrap_or_default();
+            thurea_core::desktop::Session { id, user: user.to_ascii_lowercase(), active: thurea_core::desktop::parse_loginctl_show(&show) }
+        })
+        .collect()
+}
+
+/// Programs a user is running: (pid, program path).
+pub fn running(user: &str) -> Vec<(String, String)> {
+    run("ps", &["-u", user, "-o", "pid=,args="])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let (pid, args) = l.split_once(' ')?;
+            Some((pid.to_string(), args.trim().split_whitespace().next()?.to_string()))
+        })
+        .collect()
+}
+
+/// Closes a user's program (every process of it).
+pub fn close(user: &str, program: &str) {
+    for (pid, p) in running(user) {
+        if p == program {
+            let _ = run("kill", &["-TERM", &pid]);
+        }
+    }
+}
+
+pub fn lock_session(id: &str) {
+    let _ = run("loginctl", &["lock-session", id]);
+}
+
+/// An account that can become root can't be held by Thurea.
+pub fn is_admin_account(user: &str) -> bool {
+    run("id", &["-nG", user]).unwrap_or_default().split_whitespace().any(|g| matches!(g, "wheel" | "sudo" | "admin" | "root"))
+}
+
+/// Local day and minute ("YYYY-MM-DD", minutes after midnight), in this computer's time zone.
+pub fn local_clock() -> Option<(String, u16)> {
+    let out = run("date", &["+%F %H %M"]).ok()?;
+    let f: Vec<&str> = out.split_whitespace().collect();
+    Some((f.first()?.to_string(), f.get(1)?.parse::<u16>().ok()? * 60 + f.get(2)?.parse::<u16>().ok()?))
+}

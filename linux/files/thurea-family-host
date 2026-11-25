@@ -1,0 +1,4 @@
+#!/bin/sh
+# Thurea's browser-extension helper (native messaging): tells the extension whether the signed-in
+# account is a child's, and the child's blocked sites. Started by the browser, as the user.
+exec /usr/bin/thurea family-host "$@"

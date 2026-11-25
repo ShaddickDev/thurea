@@ -210,7 +210,7 @@ impl Host for AndroidHost {
             let s = self.s();
             let mut all: std::collections::BTreeMap<String, UsageReport> =
                 std::fs::read_to_string(s.dir.join("usage.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-            all.insert(report.device.clone(), report.clone());
+            all.insert(format!("{}/{}", report.device, report.child), report.clone());
             let _ = std::fs::write(s.dir.join("usage.json"), serde_json::to_string(&all).unwrap());
             return;
         }
@@ -253,6 +253,7 @@ impl Host for AndroidHost {
             .map(|p| {
                 json!({
                     "id": p.id,
+                    "accounts": p.heartbeat.as_ref().map(|h| h.accounts.clone()).unwrap_or_default(),
                     "name": p.name(),
                     "platform": p.heartbeat.as_ref().map(|h| h.platform.clone()).unwrap_or_default(),
                     "state": p.state(),
@@ -656,6 +657,13 @@ pub fn family_flag(child: &str, flag: &str, on: bool) -> String {
     })
 }
 
+/// A user account on a household computer: a child's (`child`) or an adult's ("").
+pub fn family_account(device: &str, name: &str, user: &str, child: &str) -> String {
+    let (device, name, user) = (device.to_string(), name.to_string(), user.to_string());
+    let child = Some(child.trim().to_string()).filter(|c| !c.is_empty());
+    parent_change(move |p| p.family.set_account(&device, &name, &user, child.as_deref()))
+}
+
 pub fn family_revoke(child: &str, item: &str) -> String {
     parent_change(|p| {
         if let Some(r) = p.family.children.get_mut(child) {
@@ -841,6 +849,13 @@ pub extern "system" fn Java_com_thurea_guard_Native_familyScreen<'l>(mut env: JN
 pub extern "system" fn Java_com_thurea_guard_Native_meshDebug<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, on: jboolean, log: JString<'l>) {
     let l = jstr(&mut env, &log);
     mesh_debug(on != 0, &l)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_familyAccount<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, device: JString<'l>, name: JString<'l>, user: JString<'l>, child: JString<'l>) -> jstring {
+    let (d, n, u, c) = (jstr(&mut env, &device), jstr(&mut env, &name), jstr(&mut env, &user), jstr(&mut env, &child));
+    let r = family_account(&d, &n, &u, &c);
+    out(&mut env, r)
 }
 
 #[no_mangle]

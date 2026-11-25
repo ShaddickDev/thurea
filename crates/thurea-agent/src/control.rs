@@ -179,6 +179,7 @@ fn act(v: &Value) -> Result<String, String> {
             })
         }
         "relay" => family::relay(s(v, "addr")),
+        "account" => family::account(s(v, "device"), s(v, "user"), s(v, "child")),
         "screen" => family::screen(s(v, "child"), s(v, "what"), s(v, "a"), s(v, "b")),
         _ => Err("unknown action".into()),
     }

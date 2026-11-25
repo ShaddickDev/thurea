@@ -50,7 +50,22 @@ messages (it can't read or change them) and stores nothing.
 2. A parent enters its address (`relay.example.org:47830`) under Family → Away from home, or runs
    `thurea family relay relay.example.org:47830`. Every device learns it with the family policy.
 
-Still to come: screen-time limits and bedtime, and children's accounts on Windows and Linux.
+* **Screen time:** for each child, a daily limit (all apps), limits for social media or single
+  apps, bedtime, Pause, Lock now and extra time today — from the parent's phone, the control
+  center or `thurea family screen`. Children's phones count use themselves (Thurea's helper; no
+  extra permission) and report today's total and top apps, encrypted, to the parents. Without a
+  network, a parent's 6-digit **offline code** gives 15–120 extra minutes (that child, that day,
+  once; five wrong tries an hour).
+* **Children's accounts on shared computers (Windows, Linux):** the computer stays an adult's
+  device; a parent marks some of its user accounts as a child's (Devices in the control center or
+  the Family page, or `thurea family account DEVICE USER CHILD`). For those accounts Thurea's
+  service counts active session time, closes blocked programs (Discord, Telegram…), locks the
+  session at bedtime, while paused, when the day's time is used up and on Lock now; the browser
+  extension asks Thurea's helper (`thurea family-host`, running as the user) and blocks the
+  child's blocked sites and forces YouTube Restricted Mode in that account only. Children's
+  accounts must be standard accounts (an administrator can switch anything off; Thurea says so).
+  `thurea family check` shows what Thurea would do, without doing it.
+
 
 ## Desktop apps (Omarchy plugin, Linux tray, Windows tray)
 
