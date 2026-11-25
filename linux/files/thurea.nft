@@ -45,6 +45,10 @@ table inet thurea {
     type filter hook output priority 0; policy accept;
     oif "lo" accept
     meta skuid { 0, "systemd-resolve" } accept
+    # Systems without systemd-resolved (many Debian desktops): every app asks the family
+    # resolvers directly — allowed, they're the filtered ones.
+    ip daddr { 1.1.1.3, 1.0.0.3 } meta l4proto { tcp, udp } th dport { 53, 853 } accept
+    ip6 daddr { 2606:4700:4700::1113, 2606:4700:4700::1003 } meta l4proto { tcp, udp } th dport { 53, 853 } accept
     ip daddr @doh4 reject
     ip6 daddr @doh6 reject
     meta l4proto { tcp, udp } th dport { 53, 853 } reject

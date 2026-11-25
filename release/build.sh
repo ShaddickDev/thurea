@@ -33,11 +33,13 @@ echo "$VER" > "$R/release/VERSION"
 echo "$VER" > "$C/VERSION"
 # One version everywhere: the Rust crates (`thurea version`) and the Omarchy plugin too.
 sed -i -E "0,/^version = \"[0-9.]+\"/s//version = \"$VER\"/" "$R/Cargo.toml"
-python3 - "$R/linux/omarchy-plugin/thurea/manifest.json" "$VER" <<'PY'
+# The Omarchy plugin's manifest, and the copy at the repository root that lets
+# `omarchy plugin add https://github.com/ShaddickDev/thurea.git` install it.
+python3 - "$R/linux/omarchy-plugin/thurea/manifest.json" "$R/manifest.json" "$VER" <<'PY'
 import json, sys
-p, v = sys.argv[1], sys.argv[2]
-m = json.load(open(p)); m["version"] = v
-json.dump(m, open(p, "w"), indent=2); open(p, "a").write("\n")
+for p in sys.argv[1:3]:
+    m = json.load(open(p)); m["version"] = sys.argv[3]
+    json.dump(m, open(p, "w"), indent=2); open(p, "a").write("\n")
 PY
 cp "$R/CREDITS.md" "$C/CREDITS.md"
 
@@ -144,6 +146,42 @@ sed -i "s/^pkgver=.*/pkgver=$VER/" "$B/linux/PKGBUILD" "$R/linux/PKGBUILD"
 ( cd "$B/linux" && THUREA_DATA=$C PKGDEST=$B/linux makepkg -f --nodeps >/dev/null 2>"$B/linux.log" ) || { cat "$B/linux.log"; exit 1; }
 cp "$B"/linux/thurea-"$VER"-*.pkg.tar.zst "$D/thurea-linux.pkg.tar.zst"
 
+# ---- Debian / Ubuntu (.deb) and Fedora (.rpm): the same files (linux/stage.sh) ----
+need() { command -v "$1" >/dev/null || { echo "$1 is needed for the $2 package (Arch: sudo pacman -S $3)"; exit 1; }; }
+need dpkg-deb .deb dpkg
+need rpmbuild .rpm rpm-tools
+echo "== Debian / Ubuntu"
+DR=$B/deb-root; rm -rf "$DR"; "$R/linux/stage.sh" "$DR" "$C" deb
+mkdir -p "$DR/DEBIAN"
+cat > "$DR/DEBIAN/control" <<CTL
+Package: thurea
+Version: $VER
+Architecture: amd64
+Maintainer: Thurea <https://github.com/ShaddickDev/thurea>
+Depends: systemd, e2fsprogs, python3, nftables, openssl
+Recommends: network-manager, adb
+Protected: yes
+Section: admin
+Priority: optional
+Homepage: https://github.com/ShaddickDev/thurea
+Description: Family protection: harmful-site and ad blocker, managed by the system
+ Thurea: hosts block, family DNS, browser policies with the Thurea extension
+ force-installed, DNS lockdown, household mesh with parents' controls,
+ self-updating from signed GitHub releases.
+CTL
+install -m755 "$R/linux/debian/postinst" "$R/linux/debian/prerm" "$DR/DEBIAN/"
+dpkg-deb --root-owner-group -Zxz --build "$DR" "$D/thurea-linux.deb" >/dev/null
+echo "== Fedora"
+RR=$B/rpm-root; rm -rf "$RR" "$B/rpmbuild"; "$R/linux/stage.sh" "$RR" "$C" rpm
+mkdir -p "$B/rpmbuild"
+# Every staged file and the directories Thurea owns (config files under /etc kept on upgrade).
+( cd "$RR" && find . \( -type f -o -type l \) | sed 's|^\.||' | sort | while read -r f; do
+    case $f in /etc/*) echo "%config(noreplace) $f" ;; *) echo "$f" ;; esac
+  done
+  echo "%dir /usr/lib/thurea"; echo "%dir /usr/share/thurea" ) > "$B/rpmbuild/files.list"
+rpmbuild -bb --quiet --define "_topdir $B/rpmbuild" --define "stage $RR" --define "ver $VER" "$R/linux/rpm/thurea.spec" >/dev/null
+cp "$B"/rpmbuild/RPMS/x86_64/thurea-"$VER"-1.x86_64.rpm "$D/thurea-linux.rpm"
+
 # ---- Windows ----
 echo "== Windows"
 W=$B/windows/Thurea; mkdir -p "$W/data" "$W/web" "$W/android"
@@ -173,6 +211,7 @@ import hashlib, json, os, sys, time
 d, v = sys.argv[1], sys.argv[2]
 files = {}
 for key, name in [("extension", "thurea-extension.crx"), ("linux", "thurea-linux.pkg.tar.zst"),
+                  ("linux-deb", "thurea-linux.deb"), ("linux-rpm", "thurea-linux.rpm"),
                   ("windows", "thurea-windows.zip"), ("android", "thurea-android.apk")]:
     data = open(os.path.join(d, name), "rb").read()
     files[key] = {"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}

@@ -6,9 +6,90 @@ device in the household, and is hard to switch off. One project, one version, on
 | Platform | What it does | Installs from |
 |---|---|---|
 | **Windows** | Family DNS (Cloudflare for Families) on every network, other DNS servers and public DNS-over-HTTPS blocked in the firewall, every Chromium browser locked (Thurea extension force-installed, SafeSearch, no incognito/guest), Firefox policies, Tor/Mullvad/Opera blocked, can't be uninstalled (tasks restore each other, no Uninstall in Settings), tray app (status, verse of the day, phone setup by QR) | `thurea-windows.zip` → `Thurea\Install Thurea.cmd`, or the Thurea Windows 11 ISO (`windows/`) |
-| **Linux** (Arch / Omarchy) | The same, plus a hosts block of 64,000+ domains, nftables DNS lockdown and pacman hooks that keep it installed. **Omarchy first:** Thurea installs itself into the Omarchy bar (status, verse of the day, phone setup by QR); other desktops get `thurea-tray` | `sudo pacman -U thurea-linux.pkg.tar.zst` |
+| **Linux** (Arch / Omarchy, Debian / Ubuntu, Fedora) | The same, plus a hosts block of 64,000+ domains, nftables DNS lockdown, and a package that can't be removed (pacman hook / apt `Protected` / dnf protected packages). **Omarchy first:** Thurea installs itself into the Omarchy bar (status, verse of the day, family, phone setup by QR); other desktops get `thurea-tray` | `thurea-linux.pkg.tar.zst` · `thurea-linux.deb` · `thurea-linux.rpm` |
 | **Android** | Device owner: family DNS, private DNS/VPN checks, locked apps, YouTube ad blocker, household mesh; set up with one QR scan (`thurea setup-phone`) | `thurea-android.apk` |
 | **Browser extension** | Ads, trackers, pop-unders, cookie banners, YouTube extras; adult sites blocked when the `pornBlock` policy is set (the desktop platforms set it) | inside every desktop package |
+
+## Install
+
+Every file is on the [latest release](https://github.com/ShaddickDev/thurea/releases/latest);
+installed copies keep themselves up to date. **Thurea is meant to stay:** once installed, the
+package manager refuses to remove it (that's the point — on a weak day, it holds).
+
+### For yourself
+
+**Arch / Omarchy**
+
+```sh
+curl -LO https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.pkg.tar.zst
+sudo pacman -U thurea-linux.pkg.tar.zst
+```
+
+**Debian / Ubuntu**
+
+```sh
+curl -LO https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.deb
+sudo apt install ./thurea-linux.deb
+```
+
+**Fedora**
+
+```sh
+sudo dnf install https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.rpm
+```
+
+**Omarchy bar plugin.** The package puts Thurea in the Omarchy bar by itself. To add it again
+(after removing it from the bar, or on a new Omarchy install), either of:
+
+```sh
+omarchy plugin add https://github.com/ShaddickDev/thurea.git --enable   # Omarchy's own plugin manager
+thurea-omarchy install                                                    # from the Thurea package
+```
+
+The plugin shows Thurea's status and the family; without the Thurea package it only says how to
+install it.
+
+**Windows 10 / 11.** Download `thurea-windows.zip`, extract it, right-click
+`Thurea\Install Thurea.cmd` → *Run as administrator*. (Or build the Thurea Windows 11 ISO from
+`windows/` for a fresh install.)
+
+**Android.** Thurea runs a phone as its device owner, so it goes on at setup:
+
+* *New or factory-reset phone:* on a computer with Thurea, open the tray / Omarchy bar →
+  **Set up a phone** (or `thurea setup-phone`), tap the phone's first Welcome screen 6 times and
+  scan the code.
+* *Phone already in use, nothing erased:* **Keep my phone** in the same window (or
+  `thurea adopt-phone`), with Wireless debugging or a USB cable.
+* *No computer:* host `thurea-android.apk` yourself and make a setup code with
+  `android/make-qr.sh https://…/Thurea.apk`.
+
+### For a family
+
+Install Thurea on every device first (above) — the parents' own devices included: parents get
+the adult protection, children get the stricter one, and one family links them.
+
+1. **One household.** On the first computer: `sudo thurea init` — it prints a pairing code. On
+   every other computer: `sudo thurea join CODE`. Phones set up from a computer in the household
+   (Set up a phone / Keep my phone) join it by themselves; a phone that already has Thurea joins
+   with `sudo thurea pair-android` over USB.
+2. **Start the family** on a parent's device: on the phone, Thurea → **Family** → *Start a
+   family*; on a computer, **Family** in the tray or Omarchy bar (it asks for admin once), or
+   `sudo thurea family create "Your name"`.
+3. **The other parent:** on their phone, Family → *I'm a parent too*; on their computer,
+   `thurea family join "Name"`. Approve it on your device only if both show the same 6-digit code.
+4. **Children's phones:** set them up as above, then on your device: Family → Devices → the
+   phone → *A child's device* → the child's name. Social media freezes until you approve it,
+   new apps wait for you, YouTube goes to Restricted Mode, and the phone can't be reset.
+5. **Shared computers:** give each child a *standard* (not administrator) account. Then Family →
+   Devices → the computer → the account → *Child's account* (or
+   `thurea family account DEVICE USER CHILD`). That account gets the child's sites, programs and
+   screen time; the grown-ups' accounts keep the adult protection.
+6. **Screen time:** under each child — daily limit, social media limit, bedtime, and *Pause*,
+   *Lock now*, *+15 / +30* for right now. Offline codes for when there's no internet.
+7. **Away from home** (optional): run your own relay — see [below](#your-own-relay-reach-the-family-from-anywhere).
+
+Day to day, requests come to the parents' phones as notifications and to the computers' **Family**
+window (`thurea control-center`).
 
 ## Family: parents and children
 
@@ -87,7 +168,7 @@ Every desktop has the same Thurea app:
 
 | | Where | Built from |
 |---|---|---|
-| Omarchy | bar plugin `thurea.omarchy`, added to every Omarchy user's bar by the package | `linux/omarchy-plugin/thurea/` (QML) + `thurea` (Rust) |
+| Omarchy | bar plugin `thurea.omarchy`: added to every Omarchy user's bar by the package, or with `omarchy plugin add https://github.com/ShaddickDev/thurea.git` (the repository's root `manifest.json` points at the plugin) | `linux/omarchy-plugin/thurea/` (QML) + `thurea` (Rust) |
 | Other Linux desktops | `thurea-tray` (StatusNotifier tray; its window is a local page) | `crates/thurea-tray/` (Rust) |
 | Windows | `ThureaTray.exe`, compiled on the PC by Windows' own C# compiler | `windows/thurea/tray/` |
 | Android | the app itself | `android/` |
@@ -138,6 +219,9 @@ release/build.sh 1.0.1        # builds every platform into dist/ and signs the m
 release/publish.sh            # uploads dist/ as GitHub release v1.0.1 (latest)
 ```
 
+Building needs, besides Rust, the Android SDK and Chromium: `makepkg` (Arch package),
+`dpkg-deb` and `rpmbuild` for the Debian / Fedora packages — on Arch: `sudo pacman -S dpkg rpm-tools`.
+
 The signing keys are never in this repository: `~/.config/thurea/release-key.pem` (release
 manifest), `~/.config/thurea/extension-key.pem` (extension ID), and the Android keystore used by
 `android/build.sh`.
@@ -146,7 +230,8 @@ manifest), `~/.config/thurea/extension-key.pem` (extension ID), and the Android 
 
 ```
 extension/   the Thurea browser extension (and host/, its optional native helper)
-linux/       Thurea for Linux: PKGBUILD, thurea-apply, systemd units, pacman hooks, self-update
+linux/       Thurea for Linux: stage.sh (one file layout) → PKGBUILD (Arch), debian/ (.deb), rpm/ (.rpm);
+             thurea-apply, systemd units, pacman hooks, self-update, the Omarchy plugin
 windows/     Thurea for Windows (thurea/Thurea.ps1, tray app) and the Windows 11 ISO build
 android/     Thurea for Android
 crates/      Rust: thurea-core (shared by Android and desktop), thurea-agent (`thurea`: phone setup,

@@ -3,12 +3,13 @@
 
 Checks the latest release of github.com/ShaddickDev/thurea. A release is only used if its manifest
 is signed with Thurea's release key (public half in /usr/share/thurea/release-key.pub.pem), and
-the package only if it matches the checksum in that signed manifest; then pacman installs it.
+the package only if it matches the checksum in that signed manifest; then this distribution's
+package manager installs it (pacman on Arch, apt on Debian / Ubuntu, dnf on Fedora).
 
   thurea-update          check and update (run hourly by thurea-update.timer)
   thurea-update --check  only say whether an update is available
 """
-import hashlib, json, os, subprocess, sys, tempfile, urllib.request
+import hashlib, json, os, shutil, subprocess, sys, tempfile, urllib.request
 
 REPO = "ShaddickDev/thurea"
 BASE = os.environ.get("THUREA_UPDATE_BASE") or f"https://github.com/{REPO}/releases"
@@ -23,6 +24,17 @@ def get(url, limit=500 * 1024 * 1024):
     if len(data) > limit:
         raise ValueError(f"{url}: too large")
     return data
+
+
+def package_manager():
+    """(manifest key, install command) for this distribution."""
+    if shutil.which("pacman"):
+        return "linux", lambda f: ["pacman", "-U", "--noconfirm", f]
+    if shutil.which("apt-get") and shutil.which("dpkg"):
+        return "linux-deb", lambda f: ["apt-get", "install", "-y", "--allow-downgrades", f]
+    if shutil.which("dnf"):
+        return "linux-rpm", lambda f: ["dnf", "install", "-y", f]
+    return None, None
 
 
 def version(s):
@@ -50,7 +62,11 @@ def main():
         print(f"Thurea {m['version']} is available (installed: {have}).")
         if check_only:
             return 0
-        f = m["files"]["linux"]
+        key, install = package_manager()
+        if key is None or key not in m["files"]:
+            print("No Thurea package for this distribution's package manager in the release.")
+            return 1
+        f = m["files"][key]
         data = get(f"{BASE}/download/v{m['version']}/{f['name']}")
         if hashlib.sha256(data).hexdigest() != f["sha256"]:
             print("The download doesn't match the signed checksum: not installed.")
@@ -60,9 +76,11 @@ def main():
         if os.path.exists("/var/lib/pacman/db.lck"):
             print("pacman is busy; trying again later.")
             return 0
-        r = subprocess.run(["pacman", "-U", "--noconfirm", pkg])
+        os.chmod(tmp, 0o755)          # apt reads the package as the _apt user
+        os.chmod(pkg, 0o644)
+        r = subprocess.run(install(pkg))
         if r.returncode:
-            print(f"pacman could not install Thurea {m['version']} (exit {r.returncode}).")
+            print(f"The package manager could not install Thurea {m['version']} (exit {r.returncode}).")
             return 1
         print(f"Thurea updated to {m['version']}.")
         return 0

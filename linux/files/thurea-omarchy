@@ -39,7 +39,12 @@ install_me() {   # as the user
   [ -f "$SRC/manifest.json" ] || return 1
   mkdir -p "$HOME/.config/omarchy/plugins" "$HOME/.config/thurea"
   local link=$HOME/.config/omarchy/plugins/$ID
-  [ "$(readlink "$link" 2>/dev/null)" = "$SRC" ] || { rm -rf "$link"; ln -s "$SRC" "$link"; }
+  # Added with `omarchy plugin add` (a git checkout)? That's the user's choice: leave it.
+  if [ -d "$link" ] && [ ! -L "$link" ]; then
+    :
+  elif [ "$(readlink "$link" 2>/dev/null)" != "$SRC" ]; then
+    rm -f "$link"; ln -s "$SRC" "$link"
+  fi
   local mark=$HOME/.config/thurea/.omarchy-bar
   if [ "${1:-}" = force ] || [ ! -e "$mark" ]; then
     enable_in_bar && touch "$mark"

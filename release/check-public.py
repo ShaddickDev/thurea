@@ -15,7 +15,7 @@ PRIVATE_PATH = re.compile(
     rb"(^|[/\\])(thurea(-guard)?[-_ ]pass(\.[a-z]+)?|porn[-_ ]?pass(\.[a-z]+)?|"
     rb"pass(-state)?\.json|chromium-policy-pass\.json)([/\\]|$)", re.IGNORECASE
 )
-ARCHIVE_SUFFIXES = (".zip", ".crx", ".apk", ".tar.zst")
+ARCHIVE_SUFFIXES = (".zip", ".crx", ".apk", ".tar.zst", ".deb", ".rpm", ".tar.xz", ".tar.gz")
 PRIVATE_CODE = (
     r"""pbPass|PB_PASS|PASS_URL_RE|porn[:_ ]pass|["']porn-pass["']|pass\.json|"""
     r"Thurea( Guard)? pass[[:space:]:]|chromium-policy-pass|id=.tabAdult"
@@ -49,9 +49,15 @@ def check_artifact(name, data):
             for member in archive.infolist():
                 if not member.is_dir():
                     check_artifact(f"{name}/{member.filename}", archive.read(member))
-    elif name.lower().endswith(".tar.zst"):
-        raw = subprocess.run(["zstd", "-dc"], input=data, stdout=subprocess.PIPE, check=True).stdout
-        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
+    elif name.lower().endswith((".tar.zst", ".deb", ".rpm", ".tar.xz", ".tar.gz", ".tar")):
+        if name.lower().endswith(".tar.zst"):
+            raw = subprocess.run(["zstd", "-dc"], input=data, stdout=subprocess.PIPE, check=True).stdout
+        elif name.lower().endswith((".deb", ".rpm")):
+            # libarchive reads both (a .deb's members are its control and data tarballs).
+            raw = subprocess.run(["bsdtar", "-cf", "-", "--format", "pax", "@-"], input=data, stdout=subprocess.PIPE, check=True).stdout
+        else:
+            raw = data
+        with tarfile.open(fileobj=io.BytesIO(raw), mode="r:*") as archive:
             for member in archive:
                 path = f"{name}/{member.name}"
                 if PRIVATE_PATH.search(path.encode(errors="surrogateescape")):

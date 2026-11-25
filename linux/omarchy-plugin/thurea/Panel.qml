@@ -29,6 +29,20 @@ Panel {
   property var status: ({ state: "unknown", line: "", checks: {} })
   property var verse: ({ ref: "", text: "", translation: "WEB", notice: "" })
   property var prefs: ({ verses: true, animation: true })
+  // From `thurea family --json` (only shown to a parent of the family).
+  property var family: ({})
+  readonly property bool installed: status.line !== strings.t("status.notInstalled")
+  readonly property var familyKids: {
+    var out = []
+    var kids = family && family.children ? family.children : {}
+    for (var name in kids) {
+      var t = kids[name].today || {}
+      out.push({ name: name, used: t.used || 0, allowed: t.allowed || (kids[name].screen ? kids[name].screen.daily_minutes : 0) || 0 })
+    }
+    return out
+  }
+  readonly property int familyWaiting: family && family.inbox ? family.inbox.length : 0
+  function duration(m) { return m >= 60 ? Math.floor(m / 60) + " h " + ("0" + (m % 60)).slice(-2) + " min" : m + " min" }
   readonly property bool isProtected: status.state === "ok"
   property string actionText: ""
   // The panel shows Thurea (status, verse, actions) or, behind the gear, its settings.
@@ -41,6 +55,7 @@ Panel {
     if (!statusProc.running) statusProc.running = true
     if (!verseProc.running) verseProc.running = true
     if (!prefsProc.running) prefsProc.running = true
+    if (!familyProc.running) familyProc.running = true
   }
   function setPref(key, on) {
     var p = Object.assign({}, prefs); p[key] = on; prefs = p      // flips at once; the file follows
@@ -67,7 +82,10 @@ Panel {
 
   Component.onCompleted: refresh()
 
-  Timer { interval: 30000; running: true; repeat: true; onTriggered: if (!statusProc.running) statusProc.running = true }
+  Timer {
+    interval: 30000; running: true; repeat: true
+    onTriggered: { if (!statusProc.running) statusProc.running = true; if (!familyProc.running) familyProc.running = true }
+  }
 
   Process {
     id: statusProc
@@ -84,6 +102,11 @@ Panel {
     id: prefsProc
     command: [root.thureaBin, "prefs", "--json"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.prefs = root.parseJson(text, root.prefs) }
+  }
+  Process {
+    id: familyProc
+    command: [root.thureaBin, "family", "--json"]
+    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.family = root.parseJson(text, {}) }
   }
   Process { id: setProc }
   Process {
@@ -254,6 +277,76 @@ Panel {
                 color: root.dim
                 font.pixelSize: Style.font.caption
                 horizontalAlignment: Text.AlignRight
+              }
+            }
+          }
+
+          // ── Not installed: how to get Thurea (the plugin alone does nothing) ──
+          BorderSurface {
+            visible: !root.settingsOpen && !root.installed
+            width: parent.width
+            implicitHeight: installCol.implicitHeight + Style.space(24)
+            radius: Style.cornerRadius
+            color: Style.hoverFillFor(root.foreground, Commons.Color.accent)
+            borderSpec: Border.controlSpec("normal", root.foreground, Commons.Color.accent)
+            Column {
+              id: installCol
+              anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+              anchors.leftMargin: Style.space(14); anchors.rightMargin: Style.space(14)
+              spacing: Style.space(6)
+              PlainText { width: parent.width; text: strings.t("install.heading"); font.bold: true; wrapMode: Text.WordWrap }
+              PlainText { width: parent.width; text: strings.t("install.how"); color: root.dim; font.pixelSize: Style.font.caption; wrapMode: Text.WordWrap }
+              Button {
+                text: strings.t("install.open")
+                iconText: "\u{f0337}"
+                bordered: true
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: { openProc.command = ["xdg-open", "https://github.com/ShaddickDev/thurea#install"]; openProc.running = true }
+              }
+            }
+          }
+
+          // ── Family: requests waiting and each child's day (parents only) ──
+          BorderSurface {
+            visible: !root.settingsOpen && root.family.parent === true
+            width: parent.width
+            implicitHeight: familyCol.implicitHeight + Style.space(24)
+            radius: Style.cornerRadius
+            color: familyMouse.containsMouse ? Style.hoverFillFor(root.foreground, Commons.Color.accent) : "transparent"
+            borderSpec: Border.controlSpec("normal", root.foreground, Commons.Color.accent)
+            MouseArea {
+              id: familyMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: { root.close(); openProc.command = [root.thureaBin, "control-center"]; openProc.running = true }
+            }
+            Column {
+              id: familyCol
+              anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+              anchors.leftMargin: Style.space(14); anchors.rightMargin: Style.space(14)
+              spacing: Style.space(6)
+              PlainText { text: strings.t("family.heading"); color: Commons.Color.accent; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1.2 }
+              PlainText {
+                width: parent.width
+                text: root.familyWaiting > 0 ? strings.t("family.waiting").arg(root.familyWaiting) : strings.t("family.nothing")
+                color: root.familyWaiting > 0 ? root.urgent : root.foreground
+                font.bold: root.familyWaiting > 0
+                wrapMode: Text.WordWrap
+              }
+              Repeater {
+                model: root.familyKids
+                PlainText {
+                  required property var modelData
+                  width: familyCol.width
+                  text: modelData.allowed > 0
+                    ? strings.t("family.todayOf").arg(modelData.name).arg(root.duration(modelData.used)).arg(root.duration(modelData.allowed))
+                    : strings.t("family.today").arg(modelData.name).arg(root.duration(modelData.used))
+                  color: root.dim
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.WordWrap
+                }
               }
             }
           }

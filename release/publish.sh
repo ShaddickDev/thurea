@@ -7,7 +7,7 @@ R=$(cd "$(dirname "$0")/.." && pwd)
 D=$R/dist
 REPO=${THUREA_REPO:-ShaddickDev/thurea}
 openssl dgst -sha256 -verify "$R/release/release-key.pub.pem" -signature "$D/thurea-manifest.json.sig" "$D/thurea-manifest.json" >/dev/null
-ASSETS=(thurea-extension.crx thurea-linux.pkg.tar.zst thurea-windows.zip thurea-android.apk)
+ASSETS=(thurea-extension.crx thurea-linux.pkg.tar.zst thurea-linux.deb thurea-linux.rpm thurea-windows.zip thurea-android.apk)
 VER=$(python3 - "$D" "${ASSETS[@]}" <<'PY'
 import hashlib, json, sys
 d = sys.argv[1]; m = json.load(open(f"{d}/thurea-manifest.json"))
@@ -25,6 +25,6 @@ for i in "${!ASSETS[@]}"; do ASSETS[i]="$D/${ASSETS[i]}"; done
 python3 "$R/release/check-public.py" --assets "${ASSETS[@]}"
 echo "Publishing Thurea $VER to github.com/$REPO"
 gh release create "v$VER" --repo "$REPO" --title "Thurea $VER" --latest \
-  --notes "Thurea $VER for Windows, Linux and Android. Installed copies update themselves; every file is checked against the signed thurea-manifest.json." \
+  --notes "Thurea $VER for Windows, Linux (Arch / Omarchy, Debian / Ubuntu, Fedora) and Android. Installed copies update themselves; every file is checked against the signed thurea-manifest.json." \
   "${ASSETS[@]}" \
   "$D"/thurea-manifest.json "$D"/thurea-manifest.json.sig

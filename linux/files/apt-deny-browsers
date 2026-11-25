@@ -1,0 +1,4 @@
+# Thurea: browsers that get around the family blocker can't be installed.
+Package: torbrowser-launcher mullvad-browser opera-stable opera-beta opera-developer
+Pin: release *
+Pin-Priority: -1

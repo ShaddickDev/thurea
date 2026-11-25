@@ -1,0 +1,11 @@
+#!/bin/sh
+# Thurea: switch everything on and apply (also after an upgrade).
+set -e
+if [ "$1" = configure ]; then
+  systemctl daemon-reload || true
+  systemctl enable --now thurea.timer thurea.path thurea-extensions.service thurea-update.timer thurea-mesh.service >/dev/null 2>&1 || true
+  if [ -n "$2" ]; then systemctl restart thurea-extensions.service >/dev/null 2>&1 || true; systemctl try-restart thurea-mesh.service >/dev/null 2>&1 || true; fi
+  /usr/lib/thurea/thurea-apply || true
+  /usr/lib/thurea/thurea-omarchy install-all >/dev/null 2>&1 || true
+fi
+exit 0
