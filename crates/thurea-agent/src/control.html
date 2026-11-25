@@ -124,6 +124,46 @@ function section(title, node) {
   app.append(node);
 }
 
+const dur = (m) => m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min` : `${m} min`;
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const today = () => new Date().toLocaleDateString("sv"); // YYYY-MM-DD, local
+
+function choose(options, current, on) {
+  const sel = $(`<select style="font:inherit;background:#15171d;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:8px 10px"></select>`);
+  for (const [v, label] of options) sel.append($(`<option value="${v}" ${String(v) === String(current) ? "selected" : ""}>${esc(label)}</option>`));
+  sel.addEventListener("change", () => on(sel.value));
+  return sel;
+}
+
+function screenTime(name, c) {
+  const st = c.screen || {}, t = c.today || { used: 0, top: [] };
+  const l = $(`<div class="list"></div>`);
+  const daily = st.daily_minutes || 0;
+  const top = t.top.map(([label, m]) => `${esc(label)} ${dur(m)}`).join(", ");
+  const allowed = t.allowed || daily; // includes today's extra time when a phone reported it
+  l.append(row("📊", `Today: ${dur(t.used)}${allowed ? " of " + dur(allowed) : ""}`, top || "Nothing reported yet today"));
+  const sc = (what, a, b) => act({ action: "screen", child: name, what, a: String(a ?? ""), b: String(b ?? "") });
+  l.append(row("⏳", "Daily limit", "All apps together, except always-allowed ones",
+    choose([[0, "Off"], [30, "30 min"], [60, "1 h"], [90, "1 h 30"], [120, "2 h"], [180, "3 h"], [240, "4 h"]], daily, v => sc("daily", v))));
+  const social = (st.limits || {}).social || 0;
+  l.append(row("💬", "Social media limit", "When social media is allowed",
+    choose([[0, "Off"], [15, "15 min"], [30, "30 min"], [60, "1 h"]], social, v => sc("limit", "social", v))));
+  const bed = st.bedtime ? `${hhmm(st.bedtime.start)}-${hhmm(st.bedtime.end)}` : "off";
+  l.append(row("🌙", "Bedtime", "Only always-allowed apps, and the phone locks",
+    choose([["off", "Off"], ["20:00-07:00", "20:00–07:00"], ["21:00-07:00", "21:00–07:00"], ["22:00-07:00", "22:00–07:00"],
+            ...(["off", "20:00-07:00", "21:00-07:00", "22:00-07:00"].includes(bed) ? [] : [[bed, bed.replace("-", "–")]])], bed, v => sc("bedtime", v))));
+  const paused = st.paused_until && st.paused_until > Date.now() / 1000;
+  const now = $(`<div class="row"><div class="icon" aria-hidden="true">⏯</div><div class="main"><div class="title">${paused ? "Paused" : "Right now"}</div><div class="sub">${paused ? "until " + new Date(st.paused_until * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Pause or lock the phone, or give extra time today"}</div></div><div class="actions"></div></div>`);
+  const a = now.querySelector(".actions");
+  a.append(btn(paused ? "Resume" : "Pause 1 h", "", () => sc("pause", paused ? 0 : 60)));
+  a.append(btn("Lock now", "", () => sc("lock")));
+  a.append(btn("+15", "", () => sc("extra", 15, today())));
+  a.append(btn("+30", "", () => sc("extra", 30, today())));
+  l.append(now);
+  l.append(row("🔢", "Offline code", "Extra time without internet: make one on a parent's phone, or <code>sudo thurea family code " + esc(name) + " 30</code>"));
+  return l;
+}
+
 function render() {
   const s = state, app = document.getElementById("app");
   app.innerHTML = "";
@@ -187,6 +227,7 @@ function render() {
     for (const a of c.approved) l.append(row("✓", esc(a), "Approved for good", btn("Take back", "danger", () => act({ action: "revoke", child: name, item: a }))));
     for (const g of c.grants) l.append(row("⏳", esc(g.item), `Approved for ${g.minutes_left} more min`, btn("End now", "danger", () => act({ action: "revoke", child: name, item: g.item }))));
     section(name, l);
+    section(`${name} · screen time`, screenTime(name, c));
   }
 
   // Devices.

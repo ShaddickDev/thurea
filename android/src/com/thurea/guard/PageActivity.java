@@ -184,6 +184,7 @@ public class PageActivity extends Activity {
                             .setNegativeButton("Keep", null).show()));
                 }
                 col.addView(kl);
+                screenTime(name, k, f);
             }
         }
 
@@ -235,6 +236,83 @@ public class PageActivity extends Activity {
         col.addView(hint);
     }
 
+    /** A child's screen time: today, limits, bedtime, and pause / lock / extra time / offline code. */
+    private void screenTime(String name, org.json.JSONObject k, org.json.JSONObject f) {
+        org.json.JSONObject sc = k.optJSONObject("screen");
+        if (sc == null) sc = new org.json.JSONObject();
+        final org.json.JSONObject screen = sc;
+        col.addView(Ui.section(this, name + " · screen time"));
+        LinearLayout l = Ui.list(this);
+        // Today, from the child's devices.
+        long used = 0; StringBuilder top = new StringBuilder();
+        org.json.JSONObject usage = f.optJSONObject("usage");
+        for (java.util.Iterator<String> it = usage == null ? java.util.Collections.<String>emptyIterator() : usage.keys(); it.hasNext(); ) {
+            org.json.JSONObject u = usage.optJSONObject(it.next());
+            if (u == null || !name.equals(u.optString("child")) || !ScreenTime.today().equals(u.optString("day"))) continue;
+            used += u.optLong("used");
+            org.json.JSONArray t = u.optJSONArray("top");
+            for (int i = 0; t != null && i < Math.min(3, t.length()); i++) {
+                org.json.JSONArray x = t.optJSONArray(i);
+                if (top.length() > 0) top.append(", ");
+                top.append(x.optString(1)).append(' ').append(ScreenTime.duration(x.optLong(2)));
+            }
+        }
+        long daily = screen.isNull("daily_minutes") ? 0 : screen.optLong("daily_minutes");
+        l.addView(Ui.row(this, "📊", "Today: " + ScreenTime.duration(used) + (daily > 0 ? " of " + ScreenTime.duration(daily) : ""),
+            top.length() == 0 ? "Nothing reported yet today" : top.toString(), null));
+        l.addView(Ui.divider(this));
+        l.addView(Ui.row(this, "⏳", "Daily limit", daily > 0 ? ScreenTime.duration(daily) + " a day · tap to change" : "Off · tap to set", () -> {
+            String[] labels = { "Off", "30 min", "1 h", "1 h 30", "2 h", "3 h" };
+            int[] mins = { 0, 30, 60, 90, 120, 180 };
+            new AlertDialog.Builder(this).setTitle("Daily limit for " + name).setItems(labels,
+                (d, w) -> famDo(() -> Native.familyScreen(name, "daily", String.valueOf(mins[w]), ""))).show();
+        }));
+        org.json.JSONObject limits = screen.optJSONObject("limits");
+        long social = limits == null ? 0 : limits.optLong("social");
+        l.addView(Ui.divider(this));
+        l.addView(Ui.row(this, "💬", "Social media limit", social > 0 ? ScreenTime.duration(social) + " a day (when allowed)" : "Off · tap to set", () -> {
+            String[] labels = { "Off", "15 min", "30 min", "1 h" };
+            int[] mins = { 0, 15, 30, 60 };
+            new AlertDialog.Builder(this).setTitle("Social media a day").setItems(labels,
+                (d, w) -> famDo(() -> Native.familyScreen(name, "limit", "social", String.valueOf(mins[w])))).show();
+        }));
+        org.json.JSONObject bed = screen.optJSONObject("bedtime");
+        l.addView(Ui.divider(this));
+        l.addView(Ui.row(this, "🌙", "Bedtime", bed == null ? "Off · tap to set"
+                : ScreenTime.hhmm(bed.optInt("start")) + "–" + ScreenTime.hhmm(bed.optInt("end")) + " · only always-allowed apps", () -> {
+            String[] labels = { "Off", "20:00–07:00", "21:00–07:00", "22:00–07:00", "Other…" };
+            String[] vals = { "off", "20:00-07:00", "21:00-07:00", "22:00-07:00" };
+            new AlertDialog.Builder(this).setTitle("Bedtime for " + name).setItems(labels, (d, w) -> {
+                if (w < 4) famDo(() -> Native.familyScreen(name, "bedtime", vals[w], ""));
+                else ask("Bedtime", "21:30-06:45", "", v -> famDo(() -> Native.familyScreen(name, "bedtime", v, "")));
+            }).show();
+        }));
+        col.addView(l);
+        // Right now.
+        boolean paused = !screen.isNull("paused_until") && screen.optLong("paused_until") > System.currentTimeMillis() / 1000;
+        LinearLayout row1 = new LinearLayout(this), row2 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL); row2.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.WRAP, 1);
+        lp.rightMargin = Ui.dp(this, 8);
+        row1.addView(Ui.button(this, paused ? "Resume" : "Pause 1 h", false, Ui.ACCENT,
+            () -> famDo(() -> Native.familyScreen(name, "pause", paused ? "0" : "60", ""))), lp);
+        row1.addView(Ui.button(this, "Lock now", false, Ui.ACCENT, () -> famDo(() -> Native.familyScreen(name, "lock", "", ""))), lp);
+        row2.addView(Ui.button(this, "+15", false, Ui.ACCENT, () -> famDo(() -> Native.familyScreen(name, "extra", "15", ScreenTime.today()))), lp);
+        row2.addView(Ui.button(this, "+30", false, Ui.ACCENT, () -> famDo(() -> Native.familyScreen(name, "extra", "30", ScreenTime.today()))), lp);
+        row2.addView(Ui.button(this, "Code", false, Ui.ACCENT, () -> {
+            String[] labels = { "15 min", "30 min", "1 h", "2 h" };
+            int[] mins = { 15, 30, 60, 120 };
+            new AlertDialog.Builder(this).setTitle("Extra time code for " + name).setItems(labels, (d, w) -> {
+                String code = Native.familyCode(name, mins[w], ScreenTime.today());
+                new AlertDialog.Builder(this).setTitle(code)
+                    .setMessage(name + " types this in Thurea → Ask a parent → \"I have a code\". It works today only, once, even without internet.")
+                    .setPositiveButton("OK", null).show();
+            }).show();
+        }), lp);
+        col.addView(row1, Ui.gapTop(this, 10));
+        col.addView(row2, Ui.gapTop(this, 8));
+    }
+
     private static String join(org.json.JSONArray a) {
         List<String> l = new ArrayList<>();
         for (int i = 0; a != null && i < a.length(); i++) l.add(a.optString(i));
@@ -254,6 +332,23 @@ public class PageActivity extends Activity {
         org.json.JSONArray asks = f.optJSONArray("asks");
         for (int i = 0; asks != null && i < asks.length(); i++) asked.add(asks.optJSONObject(i).optString("item"));
 
+        // Screen time today, and a parent's code for extra time.
+        String line = FamilyMode.screenLine(FamilyMode.plan(this));
+        LinearLayout st = Ui.card(this);
+        st.addView(Ui.title(this, line.isEmpty() ? "No time limits" : line, 17));
+        st.addView(Ui.button(this, "I have a code from a parent", false, Ui.ACCENT, () -> {
+            EditText e = new EditText(this);
+            e.setHint("6 digits");
+            e.setInputType(InputType.TYPE_CLASS_NUMBER);
+            new AlertDialog.Builder(this).setTitle("Parent's code").setView(e)
+                .setPositiveButton("OK", (d, w) -> famDo(() -> {
+                    String m = Native.useCode(e.getText().toString(), ScreenTime.today());
+                    FamilyMode.screenTick(getApplicationContext());
+                    return m;
+                })).setNegativeButton("Cancel", null).show();
+        }), Ui.gapTop(this, 12));
+        col.addView(st);
+
         col.addView(Ui.section(this, "Apps that need a parent's OK"));
         LinearLayout l = Ui.list(this);
         List<String[]> frozen = FamilyMode.frozenApps(this);
@@ -263,6 +358,10 @@ public class PageActivity extends Activity {
             if (!first) l.addView(Ui.divider(this));
             first = false;
             boolean waiting = asked.contains(a[0]);
+            if ("screen".equals(a[3])) {           // time, not permission: a parent's code or tomorrow
+                l.addView(Ui.row(this, "⏰", a[1], a[2], null));
+                continue;
+            }
             l.addView(Ui.row(this, waiting ? "⏳" : "🙋", a[1], a[2] + (waiting ? " · asked, waiting for a parent" : " · tap to ask"),
                 waiting ? null : () -> famDo(() -> { String m = Native.ask("app", a[0], a[1]); Native.meshStart(); return m; })));
         }

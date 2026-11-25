@@ -27,7 +27,13 @@ final class Native {
     /** Family / child screens: role, parents, devices, children's rules, inbox, own requests. */
     static native String familyJson();
     /** What this phone must enforce (apps to suspend, Chrome extras, DNS, restrictions). */
-    static native String androidPlan(String appsJson, String knownJson);
+    static native String androidPlan(String appsJson, String knownJson, String clockJson);
+    /** Child: a parent's offline code for extra time today. */
+    static native String useCode(String code, String day);
+    /** Parent: a code giving a child 15/30/60/120 extra minutes today. */
+    static native String familyCode(String child, int minutes, String day);
+    /** Parent: screen time — what: daily, limit, bedtime, pause, lock, extra, always. */
+    static native String familyScreen(String child, String what, String a, String b);
     /** A child asks a parent: kind "app" or "site". Returns a message for the screen. */
     static native String ask(String kind, String item, String label);
     static native String familyCreate(String parentName);
@@ -41,6 +47,8 @@ final class Native {
     /** The household's self-hosted relay ("host:port"; "" = none). Parents only. */
     static native String familyRelay(String addr);
     /** flag: "hold_new_apps" or "block_debugging". */
+    /** Mesh debug log to files/mesh.log (adb only, via Remote). */
+    static native void meshDebug(boolean on, String logPath);
     static native String familyFlag(String child, String flag, boolean on);
     static native boolean meshStart();
     /** Peers reached by address (other networks, Tailscale), comma separated. */

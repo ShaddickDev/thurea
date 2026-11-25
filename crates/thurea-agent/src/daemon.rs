@@ -170,6 +170,10 @@ impl Host for Desktop {
     }
 
     fn on_event(&mut self, e: &Event) {
+        if let Event::Usage { report } = e {
+            crate::family::save_usage(report);
+            return;
+        }
         if let Event::Request { request } = e {
             // A child asks: only a parent's computer keeps it (and says so).
             if crate::family::received(request, &self.policy) {

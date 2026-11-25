@@ -10,6 +10,7 @@
 //!                 and alerts when a device drops its protection or goes quiet.
 //! * [`net`]     — the UDP loop that carries the mesh (std only, runs on every platform).
 //! * [`relay`]   — the self-hosted relay: devices reach each other from anywhere (ciphertext only).
+//! * [`screen`]  — screen time: limits, bedtime, pause, lock, offline codes.
 //! * [`qr`]      — QR codes for one-scan phone setup.
 //! * [`bend`]    — bulk audits on the Bend/HVM parallel runtime, with an exact Rust re-check.
 //! * [`verses`]  — verse of the day (World English Bible), the same on every device.
@@ -23,6 +24,7 @@ pub mod net;
 pub mod policy;
 pub mod qr;
 pub mod relay;
+pub mod screen;
 pub mod status;
 pub mod verses;
 

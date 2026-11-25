@@ -32,7 +32,7 @@ pub struct Family {
     #[serde(default)]
     pub children: BTreeMap<String, ChildRules>,
     /// Answered requests that weren't a child's (devices asking to become a parent's).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub decided: Vec<String>,
 }
 
@@ -97,6 +97,9 @@ pub struct ChildRules {
     /// Requests a parent has answered (approved or declined), newest last.
     #[serde(default)]
     pub decided: Vec<String>,
+    /// Limits, bedtime, pause, lock now.
+    #[serde(default, skip_serializing_if = "crate::screen::ScreenTime::is_unset")]
+    pub screen: crate::screen::ScreenTime,
 }
 
 impl Default for ChildRules {
@@ -114,6 +117,7 @@ impl Default for ChildRules {
             hold_new_apps: true,
             block_debugging: true,
             decided: Vec::new(),
+            screen: Default::default(),
         }
     }
 }
@@ -216,6 +220,8 @@ pub enum AppVerdict {
     Blocked { category: String, label: String },
     /// New since the device became a child's, not approved yet.
     Held,
+    /// Screen time: bedtime, paused, or a limit used up.
+    Screen(crate::screen::Stop),
 }
 
 impl ChildRules {
@@ -311,6 +317,11 @@ impl ChildRules {
 }
 
 impl Family {
+    /// No family at all (then it isn't written out, see [`crate::policy::Policy`]).
+    pub fn is_unset(&self) -> bool {
+        *self == Family::default()
+    }
+
     pub fn is_parent(&self, key: &str) -> bool {
         self.parents.iter().any(|p| p.key == key)
     }
@@ -399,13 +410,26 @@ pub struct AndroidPlan {
     /// Private DNS host for this device.
     pub dns_host: String,
     pub block_debugging: bool,
-    /// Seconds since the epoch when this plan should be worked out again (a grant ends).
+    /// Seconds since the epoch when this plan should be worked out again (a grant ends, a
+    /// limit runs out, bedtime starts…).
     pub recheck_at: Option<u64>,
+    /// Screen time today (children's devices with a clock).
+    pub screen: Option<crate::screen::Summary>,
+    /// A parent's "Lock now" count: lock the screen when it goes up.
+    pub lock_seq: u64,
 }
 
 /// `apps`: the device's launchable, user-installed apps (Thurea leaves out its own and the
 /// ones it manages); `known`: the apps that were there when the device became a child's.
 pub fn android_plan(policy: &crate::Policy, device: &str, apps: &[String], known: &[String], now: u64) -> AndroidPlan {
+    android_plan_at(policy, device, apps, known, now, &crate::screen::Used::new(), None, 0)
+}
+
+/// [`android_plan`] with screen time: today's use, the local clock, and extra minutes from
+/// offline codes used on this device.
+#[allow(clippy::too_many_arguments)]
+pub fn android_plan_at(policy: &crate::Policy, device: &str, apps: &[String], known: &[String], now: u64,
+                       used: &crate::screen::Used, clock: Option<&crate::screen::Clock>, local_bonus: u32) -> AndroidPlan {
     let keep = &policy.android.keep;
     match policy.family.child_of(device) {
         None => AndroidPlan {
@@ -418,6 +442,8 @@ pub fn android_plan(policy: &crate::Policy, device: &str, apps: &[String], known
             dns_host: policy.family_dns.host.clone(),
             block_debugging: false,
             recheck_at: None,
+            screen: None,
+            lock_seq: 0,
         },
         Some((name, rules)) => {
             let mut suspend = Vec::new();
@@ -435,6 +461,22 @@ pub fn android_plan(policy: &crate::Policy, device: &str, apps: &[String], known
                     suspend.push((a.clone(), v));
                 }
             }
+            // Screen time: among the apps still allowed, close what bedtime / limits say.
+            let mut recheck_at = rules.next_change(now);
+            let mut screen = None;
+            if let Some(clock) = clock {
+                let cat = |a: &str| catalog_app(a).map(|e| e.category);
+                let (stops, summary) = rules.screen.verdict(&allow, used, clock, local_bonus, &cat);
+                for (a, why) in stops {
+                    allow.retain(|x| x != &a);
+                    suspend.push((a, AppVerdict::Screen(why)));
+                }
+                if let Some(m) = summary.recheck_in {
+                    let at = now + m as u64 * 60;
+                    recheck_at = Some(recheck_at.map_or(at, |r| r.min(at)));
+                }
+                screen = Some(summary);
+            }
             AndroidPlan {
                 role: Role::Child,
                 child: Some(name),
@@ -444,7 +486,9 @@ pub fn android_plan(policy: &crate::Policy, device: &str, apps: &[String], known
                 youtube_restrict: rules.youtube_restrict.max(1),
                 dns_host: CHILD_DNS_HOST.into(),
                 block_debugging: rules.block_debugging,
-                recheck_at: rules.next_change(now),
+                recheck_at,
+                screen,
+                lock_seq: rules.screen.lock_seq,
             }
         }
     }
@@ -512,6 +556,30 @@ mod tests {
         assert!(!sam.blocked_sites(5000).contains(&"instagram.com".to_string()));
         sam.revoke("instagram.com");
         assert!(sam.blocked_sites(5000).contains(&"instagram.com".to_string()));
+    }
+
+    #[test]
+    fn screen_time_in_the_plan() {
+        let mut p = child_policy();
+        let sam = p.family.children.get_mut("Sam").unwrap();
+        sam.screen.daily_minutes = Some(60);
+        sam.screen.always_allowed.push("org.school.app".into());
+        let apps: Vec<String> = ["com.whatsapp", "com.example.game", "org.school.app"].iter().map(|s| s.to_string()).collect();
+        let known = apps.clone();
+        let mut used = crate::screen::Used::new();
+        used.insert("com.example.game".into(), 61);
+        let clock = crate::screen::Clock { now: 100, day: "2026-11-25".into(), minute: 600 };
+        let plan = android_plan_at(&p, "kidphone", &apps, &known, 100, &used, Some(&clock), 0);
+        let stopped: Vec<&str> = plan.suspend.iter().map(|(a, _)| a.as_str()).collect();
+        assert_eq!(stopped, ["com.whatsapp", "com.example.game"]);
+        assert_eq!(plan.allow, ["org.school.app"]);
+        assert_eq!(plan.screen.as_ref().unwrap().left, Some(0));
+        // An offline code for 30 minutes opens them again.
+        let plan = android_plan_at(&p, "kidphone", &apps, &known, 100, &used, Some(&clock), 30);
+        assert!(plan.suspend.is_empty());
+        assert_eq!(plan.recheck_at, Some(100 + 29 * 60));
+        let json = serde_json::to_string(&plan).unwrap();
+        assert!(json.contains("\"lock_seq\""));
     }
 
     #[test]

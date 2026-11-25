@@ -26,6 +26,10 @@ pub const HELP: &str = "\
                                    What a child may use without asking
   thurea family hold|nohold CHILD  Hold a child's new apps until approved (or not)
   thurea family revoke CHILD ITEM  Take back an approval (app package or site)
+  thurea family screen CHILD daily|limit|bedtime|pause|lock|extra|always [A] [B]
+                                   Screen time, e.g. daily 90 · bedtime 21:00-07:00 · pause 60 ·
+                                   lock · extra 30 · limit social 30 · always org.school.app on
+  thurea family code CHILD MIN     Offline code for 15/30/60/120 extra minutes today (as admin)
   thurea family relay HOST:PORT|off
                                    The household's own relay, to reach each other from anywhere
   thurea relay [--port N]          Run a relay (on a server with a public UDP port)";
@@ -103,6 +107,38 @@ pub fn received(r: &Request, policy: &Policy) -> bool {
     refs.push(r);
     save_inbox_refs(&refs);
     true
+}
+
+fn usage_path() -> PathBuf {
+    config::state_dir().join("family-usage.json")
+}
+
+/// From the service: a child's device reported today's screen time.
+pub fn save_usage(r: &thurea_core::screen::UsageReport) {
+    let mut all: std::collections::BTreeMap<String, thurea_core::screen::UsageReport> =
+        std::fs::read_to_string(usage_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    all.insert(r.device.clone(), r.clone());
+    let _ = std::fs::write(usage_path(), serde_json::to_string(&all).unwrap());
+}
+
+/// Today's local date, "YYYY-MM-DD" (the OS knows the time zone).
+pub fn local_day() -> String {
+    #[cfg(windows)]
+    let out = std::process::Command::new("powershell").args(["-NoProfile", "-Command", "Get-Date -Format yyyy-MM-dd"]).output();
+    #[cfg(not(windows))]
+    let out = std::process::Command::new("date").arg("+%F").output();
+    out.ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|d| d.len() == 10).unwrap_or_default()
+}
+
+/// A screen-time change for a child (see `ScreenTime::change`).
+pub fn screen(child: &str, what: &str, a: &str, b: &str) -> Result<String, String> {
+    let now = thurea_core::now();
+    let b = if what == "extra" && b.is_empty() { local_day() } else { b.to_string() };
+    thurea_core::screen::ScreenTime::default().change(what, a, &b, now)?;
+    let (child, what, a) = (child.to_string(), what.to_string(), a.to_string());
+    change(move |p| {
+        let _ = p.family.children.entry(child).or_default().screen.change(&what, &a, &b, now);
+    })
 }
 
 /// The policy in force here: the service's readable copy, or (as admin) the config.
@@ -223,11 +259,28 @@ pub fn json() -> Value {
         })
         .collect();
     let now = thurea_core::now();
+    let usage: std::collections::BTreeMap<String, thurea_core::screen::UsageReport> =
+        std::fs::read_to_string(usage_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    let today = local_day();
     let children: serde_json::Map<String, Value> = f
         .children
         .iter()
         .map(|(n, r)| {
+            let reports: Vec<&thurea_core::screen::UsageReport> = usage.values().filter(|u| &u.child == n && u.day == today).collect();
+            let mut top: Vec<(String, u32)> = Vec::new();
+            for u in &reports {
+                for (_, label, m) in &u.top {
+                    match top.iter_mut().find(|(l, _)| l == label) {
+                        Some(t) => t.1 += m,
+                        None => top.push((label.clone(), *m)),
+                    }
+                }
+            }
+            top.sort_by(|a, b| b.1.cmp(&a.1));
+            top.truncate(4);
             (n.clone(), json!({
+                "screen": r.screen,
+                "today": { "used": reports.iter().map(|u| u.used).sum::<u32>(), "allowed": reports.iter().filter_map(|u| u.allowed).max(), "top": top },
                 "social": r.category_allowed("social"),
                 "messaging": r.category_allowed("messaging"),
                 "hold_new_apps": r.hold_new_apps,
@@ -295,6 +348,25 @@ pub fn run(args: &[String]) -> Result<String, String> {
             })
         }
         "relay" => relay(&a(2, "HOST:PORT|off")?),
+        "screen" => {
+            let (child, what) = (a(2, "CHILD WHAT [A] [B]")?, a(3, "CHILD WHAT [A] [B]")?);
+            screen(&child, &what, args.get(4).map(String::as_str).unwrap_or(""), args.get(5).map(String::as_str).unwrap_or(""))
+        }
+        "code" => {
+            let (child, mins) = (a(2, "CHILD MINUTES")?, a(3, "CHILD MINUTES")?);
+            let m: u32 = mins.parse().map_err(|_| "minutes must be 15, 30, 60 or 120")?;
+            if !thurea_core::screen::CODE_MINUTES.contains(&m) {
+                return Err("codes are for 15, 30, 60 or 120 minutes".into());
+            }
+            if !is_parent(&current_policy()) {
+                return Err("only a parent makes codes".into());
+            }
+            // The household key is readable by admins only.
+            let key = config::Config::load()?.key_bytes()?;
+            let day = local_day();
+            Ok(format!("{}  ({m} extra minutes for {child}, today {day} only; type it in Thurea → Ask a parent on {child}'s phone)",
+                thurea_core::screen::offline_code(&key, &child, &day, m)))
+        }
         _ => Err(format!("unknown: thurea family {sub}\n\n{HELP}")),
     }
 }

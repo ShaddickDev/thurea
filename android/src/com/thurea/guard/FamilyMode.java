@@ -69,12 +69,13 @@ final class FamilyMode {
         // Ask once without "known" to learn the role; the apps present when the phone first
         // became a child's are not "new" (they're judged by category only).
         JSONObject p;
-        try { p = new JSONObject(Native.androidPlan(new JSONArray(apps).toString(), new JSONArray(known).toString())); }
+        String clock = ScreenTime.clockJson(c);
+        try { p = new JSONObject(Native.androidPlan(new JSONArray(apps).toString(), new JSONArray(known).toString(), clock)); }
         catch (Exception e) { return new JSONObject(); }
         boolean child = "child".equals(p.optString("role"));
         if (child && !wasChild) {
             sp.edit().putBoolean("child", true).putStringSet("known", new HashSet<>(apps)).commit();
-            try { p = new JSONObject(Native.androidPlan(new JSONArray(apps).toString(), new JSONArray(apps).toString())); }
+            try { p = new JSONObject(Native.androidPlan(new JSONArray(apps).toString(), new JSONArray(apps).toString(), clock)); }
             catch (Exception ignored) {}
         }
         return p;
@@ -93,25 +94,17 @@ final class FamilyMode {
     /** Carries out the plan; returns status lines. */
     static String enforce(Context c, DevicePolicyManager dpm, ComponentName a, JSONObject plan) {
         SharedPreferences sp = prefs(c);
-        Set<String> frozen = new HashSet<>(sp.getStringSet("frozen", new HashSet<>()));
         boolean child = isChild(plan);
         StringBuilder r = new StringBuilder();
 
-        // 1. Apps: suspend what's blocked or waiting; release what Thurea froze and is allowed now.
-        List<String> suspend = new ArrayList<>();
-        int blocked = 0, held = 0;
-        JSONArray s = plan.optJSONArray("suspend");
-        for (int i = 0; s != null && i < s.length(); i++) {
-            JSONArray pair = s.optJSONArray(i);
-            if (pair == null) continue;
-            suspend.add(pair.optString(0));
-            if ("held".equals(pair.optJSONObject(1) == null ? "" : pair.optJSONObject(1).optString("verdict"))) held++; else blocked++;
+        // Debugging (adb … Remote --ez mesh_debug true): the plan, where adb can read it.
+        if (new java.io.File(c.getFilesDir(), "debug").exists()) {
+            try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(c.getExternalFilesDir(null), "plan.json"))) { w.write(plan.toString(2)); } catch (Exception ignored) {}
         }
-        List<String> release = new ArrayList<>();
-        for (String p : frozen) if (!suspend.contains(p)) release.add(p);
-        try { if (!suspend.isEmpty()) dpm.setPackagesSuspended(a, suspend.toArray(new String[0]), true); } catch (Exception ignored) {}
-        try { if (!release.isEmpty()) dpm.setPackagesSuspended(a, release.toArray(new String[0]), false); } catch (Exception ignored) {}
-        sp.edit().putStringSet("frozen", new HashSet<>(suspend)).apply();
+        // 1. Apps: suspend what's blocked, waiting or out of time; release the rest.
+        int[] counts = applyApps(c, dpm, a, plan);
+        int blocked = counts[0], held = counts[1];
+        applyLock(c, dpm, a, plan);
 
         // 2. Child-only restrictions (and lifting them when the phone stops being a child's).
         List<String> restrictions = new ArrayList<>(java.util.Arrays.asList(CHILD_RESTRICTIONS));
@@ -156,7 +149,108 @@ final class FamilyMode {
         r.append("✓ Social media blocked until a parent approves").append(blocked > 0 ? " (" + blocked + " app" + (blocked == 1 ? "" : "s") + ")" : "").append('\n');
         if (held > 0) r.append("✓ ").append(held).append(" new app").append(held == 1 ? "" : "s").append(" waiting for a parent\n");
         r.append("✓ No factory reset, safe mode or clock changes").append(debugging ? ", no USB debugging" : "").append('\n');
+        String line = screenLine(plan);
+        if (!line.isEmpty()) r.append("✓ Screen time: ").append(line).append('\n');
+        String unfrozen = sp.getString("unfrozen", "");
+        if (!unfrozen.isEmpty()) r.append("! Android wouldn't freeze: ").append(unfrozen).append('\n');
         return r.toString();
+    }
+
+    /** Suspends what the plan says and releases what Thurea froze before; returns {blocked, held}. */
+    static int[] applyApps(Context c, DevicePolicyManager dpm, ComponentName a, JSONObject plan) {
+        SharedPreferences sp = prefs(c);
+        Set<String> frozen = new HashSet<>(sp.getStringSet("frozen", new HashSet<>()));
+        List<String> suspend = new ArrayList<>();
+        int blocked = 0, held = 0;
+        JSONArray s = plan.optJSONArray("suspend");
+        for (int i = 0; s != null && i < s.length(); i++) {
+            JSONArray pair = s.optJSONArray(i);
+            if (pair == null) continue;
+            suspend.add(pair.optString(0));
+            String v = pair.optJSONObject(1) == null ? "" : pair.optJSONObject(1).optString("verdict");
+            if ("held".equals(v)) held++; else if ("blocked".equals(v)) blocked++;
+        }
+        List<String> send = new ArrayList<>(), release = new ArrayList<>();
+        // What Android says is frozen, not what Thurea remembers (an earlier attempt may have failed,
+        // or something may have unfrozen an app since).
+        for (String p : suspend) {
+            boolean is;
+            try { is = dpm.isPackageSuspended(a, p); } catch (Exception e) { is = false; }
+            if (!is) send.add(p);
+        }
+        for (String p : frozen) if (!suspend.contains(p)) release.add(p);
+        // Android won't freeze a protected app (Thurea protects the app stores and pinned apps from
+        // being switched off): lift that protection for what has to freeze now.
+        if (Build.VERSION.SDK_INT >= 30 && !suspend.isEmpty()) {
+            try {
+                List<String> prot = new ArrayList<>(dpm.getUserControlDisabledPackages(a));
+                if (prot.removeAll(suspend)) dpm.setUserControlDisabledPackages(a, prot);
+            } catch (Exception ignored) {}
+        }
+        // One at a time: Android refuses some apps (the Play Store is its required installer), and
+        // one refusal must not leave the rest running.
+        List<String> failed = new ArrayList<>();
+        for (String p : send) {
+            try {
+                String[] f = dpm.setPackagesSuspended(a, new String[]{ p }, true);
+                if (f != null && f.length > 0 && !"com.android.vending".equals(p)) failed.add(p);
+            } catch (Exception e) {
+                if (!"com.android.vending".equals(p)) failed.add(p);
+            }
+        }
+        sp.edit().putString("unfrozen", String.join(",", failed)).apply();
+        try { if (!release.isEmpty()) dpm.setPackagesSuspended(a, release.toArray(new String[0]), false); } catch (Exception ignored) {}
+        sp.edit().putStringSet("frozen", new HashSet<>(suspend)).apply();
+        return new int[]{ blocked, held };
+    }
+
+    /** "Lock now" from a parent, and the moment bedtime or a pause starts: lock the screen once. */
+    static void applyLock(Context c, DevicePolicyManager dpm, ComponentName a, JSONObject plan) {
+        if (!isChild(plan)) return;
+        SharedPreferences sp = prefs(c);
+        long seq = plan.optLong("lock_seq"), seen = sp.getLong("lockSeen", -1);
+        JSONObject sc = plan.optJSONObject("screen");
+        boolean quiet = sc != null && (sc.optBoolean("bedtime") || sc.optBoolean("paused"));
+        boolean lock = (seen >= 0 && seq > seen) || (quiet && !sp.getBoolean("wasQuiet", false));
+        sp.edit().putLong("lockSeen", seq).putBoolean("wasQuiet", quiet).apply();
+        if (lock) {
+            boolean done;
+            try { dpm.lockNow(); done = true; } catch (Exception e) { done = false; }
+            if (!done) HelperService.lockScreen();
+        }
+    }
+
+    /** Every minute while the screen is on (from the helper): screen time only, quickly. */
+    static void screenTick(Context c) {
+        if (!prefs(c).getBoolean("child", false) || !Policy.isOwner(c)) return;
+        DevicePolicyManager dpm = c.getSystemService(DevicePolicyManager.class);
+        ComponentName a = Policy.admin(c);
+        JSONObject plan = plan(c);
+        if (!isChild(plan)) return;
+        applyApps(c, dpm, a, plan);
+        applyLock(c, dpm, a, plan);
+    }
+
+    /** A line about today's screen time for the child's screens and the status page. */
+    static String screenLine(JSONObject plan) {
+        JSONObject sc = plan.optJSONObject("screen");
+        if (sc == null) return "";
+        if (sc.optBoolean("paused")) return "Paused by a parent";
+        if (sc.optBoolean("bedtime")) return "Bedtime — only always-allowed apps";
+        long used = sc.optLong("used");
+        if (sc.isNull("allowed") || !sc.has("allowed")) return used > 0 ? "Today: " + ScreenTime.duration(used) : "";
+        long left = sc.optLong("left");
+        return left == 0 ? "Time's up for today (" + ScreenTime.duration(used) + ")" : "Today: " + ScreenTime.duration(used) + " · " + ScreenTime.duration(left) + " left";
+    }
+
+    static String screenWhy(JSONObject v) {
+        switch (v == null ? "" : v.optString("why")) {
+            case "bedtime": return "Bedtime";
+            case "paused": return "Paused by a parent";
+            case "daily_limit": return "Time's up for today";
+            case "limit": return "Time's up for " + v.optString("what");
+            default: return "Closed";
+        }
     }
 
     /** Apps Thurea froze on this child's phone, with a label and why. */
@@ -164,7 +258,7 @@ final class FamilyMode {
         List<String[]> out = new ArrayList<>();
         JSONObject plan;
         try { plan = new JSONObject(Native.androidPlan(new JSONArray(apps(c)).toString(),
-            new JSONArray(prefs(c).getStringSet("known", new HashSet<>())).toString())); } catch (Exception e) { return out; }
+            new JSONArray(prefs(c).getStringSet("known", new HashSet<>())).toString(), ScreenTime.clockJson(c))); } catch (Exception e) { return out; }
         JSONArray s = plan.optJSONArray("suspend");
         PackageManager pm = c.getPackageManager();
         for (int i = 0; s != null && i < s.length(); i++) {
@@ -174,8 +268,9 @@ final class FamilyMode {
             JSONObject v = pair.optJSONObject(1);
             String label = pkg;
             try { label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) {}
-            String why = v != null && "held".equals(v.optString("verdict")) ? "New app" : "Social media";
-            out.add(new String[]{ pkg, label, why });
+            String verdict = v == null ? "" : v.optString("verdict");
+            String why = "held".equals(verdict) ? "New app" : "blocked".equals(verdict) ? "Social media" : screenWhy(v);
+            out.add(new String[]{ pkg, label, why, verdict });
         }
         return out;
     }

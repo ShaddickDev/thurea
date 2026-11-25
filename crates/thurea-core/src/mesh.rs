@@ -51,6 +51,8 @@ pub enum Body {
     PolicyPart { digest: String, index: u32, total: u32, b64: String },
     /// A child asking for an app or a site; parents' devices show it.
     Request(Request),
+    /// A child's device's screen time today, for the parents.
+    Usage(crate::screen::UsageReport),
 }
 
 /// Bytes of policy JSON per piece (base64 inside the message, which is encrypted and base64
@@ -137,6 +139,8 @@ pub enum Event {
     AdoptPolicy { policy: Policy, from: String },
     /// A child asks for something (parents' devices show it; answered ones are dropped).
     Request { request: Request },
+    /// A child's device reported its screen time today.
+    Usage { report: crate::screen::UsageReport },
 }
 
 impl Event {
@@ -160,7 +164,7 @@ impl Event {
                 format!("{} wants to be a parent on this family (code {})", request.label, crate::family::match_code(&request.item))
             }
             Event::Request { request } => format!("{} asks for {}", request.child, request.label),
-            Event::SendPolicy { .. } | Event::RequestPolicy { .. } => return None,
+            Event::SendPolicy { .. } | Event::RequestPolicy { .. } | Event::Usage { .. } => return None,
         })
     }
 
@@ -320,6 +324,12 @@ impl Mesh {
                         }
                         _ => {}
                     }
+                }
+            }
+            Body::Usage(u) => {
+                // Only a child's device, about itself.
+                if u.device == peer.id && policy.family.child_of(&u.device).is_some() {
+                    ev.push(Event::Usage { report: u });
                 }
             }
             Body::Request(r) => {

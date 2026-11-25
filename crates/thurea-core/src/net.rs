@@ -72,6 +72,19 @@ pub trait Host {
     }
 }
 
+/// Debug log of the mesh (THUREA_DEBUG=1 → stderr; THUREA_DEBUG_FILE=path → appended there).
+pub fn debug(line: &str) {
+    if std::env::var_os("THUREA_DEBUG").is_some() {
+        eprintln!("{line}");
+    }
+    if let Some(p) = std::env::var_os("THUREA_DEBUG_FILE") {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+            let _ = writeln!(f, "{} {line}", crate::now());
+        }
+    }
+}
+
 fn now_ms() -> u128 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
 }
@@ -83,7 +96,18 @@ pub fn heartbeat(cfg: &NodeConfig, report: &Report, policy: &Policy) -> Body {
         policy_version: policy.version,
         policy_digest: policy.digest(),
         overall: report.overall(),
-        problems: report.problems().cloned().collect(),
+        // Kept small: a heartbeat must fit one datagram (relays and many networks drop bigger).
+        problems: report
+            .problems()
+            .take(4)
+            .map(|c| {
+                let mut c = c.clone();
+                if c.detail.chars().count() > 80 {
+                    c.detail = c.detail.chars().take(79).collect::<String>() + "…";
+                }
+                c
+            })
+            .collect(),
     })
 }
 
@@ -128,7 +152,10 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
     let send = |mesh: &mut Mesh, body: Body, to: &[SocketAddr], via: Option<SocketAddr>| {
         let pkt = mesh::seal(&cfg.key, &mesh.message(body, now_ms()));
         for a in to {
-            let _ = if Some(*a) == via { sock.send_to(&relay::wrap(&room, &pkt), a) } else { sock.send_to(&pkt, a) };
+            let bytes = if Some(*a) == via { relay::wrap(&room, &pkt) } else { pkt.clone() };
+            if let Err(e) = sock.send_to(&bytes, a) {
+                self::debug(&format!("mesh: send to {a} failed: {e}"));
+            }
         }
     };
 
@@ -174,10 +201,34 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
                     Some(_) => continue,
                     None => &buf[..n],
                 };
-                let Ok(msg) = mesh::open(&cfg.key, packet) else { continue };
+                let debug = std::env::var_os("THUREA_DEBUG").is_some() || std::env::var_os("THUREA_DEBUG_FILE").is_some();
+                let msg = match mesh::open(&cfg.key, packet) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        if debug {
+                            self::debug(&format!("mesh: dropped {} bytes from {from}: {e:?}", packet.len()));
+                        }
+                        continue;
+                    }
+                };
                 let sender = msg.from.clone();
+                let kind = if debug { serde_json::to_value(&msg.body).ok().and_then(|v| v["kind"].as_str().map(String::from)).unwrap_or_default() } else { String::new() };
                 let policy = host.policy();
-                let Ok(events) = mesh.receive(msg, crate::now(), &policy) else { continue };
+                let events = match mesh.receive(msg, crate::now(), &policy) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        if debug {
+                            self::debug(&format!("mesh: rejected {kind} from {sender} ({from}): {e:?}"));
+                        }
+                        continue;
+                    }
+                };
+                if debug {
+                    self::debug(&format!("mesh: {kind} from {sender} ({from}), {} bytes", packet.len()));
+                    for e in &events {
+                        self::debug(&format!("mesh:   -> {}", serde_json::to_string(e).unwrap_or_default().chars().take(200).collect::<String>()));
+                    }
+                }
                 seen_at.insert(sender, from);
                 // Policy messages go to where the peer was heard from and to every known
                 // route (NAT may hide the first); receivers ignore offers that aren't newer.
@@ -299,6 +350,18 @@ mod tests {
 
     /// Two real nodes on localhost: the degraded one is reported, and the newer policy
     /// travels to the older node.
+    #[test]
+    fn heartbeats_fit_one_datagram() {
+        let mut r = Report::default();
+        for i in 0..40 {
+            r.push(crate::Check::degraded(&format!("c{i}"), "x".repeat(500)));
+        }
+        let cfg = NodeConfig::new("a".repeat(16), "A very long device name".into(), "android", crate::crypto::new_key().to_vec());
+        let mut m = Mesh::new("a");
+        let pkt = mesh::seal(&cfg.key, &m.message(heartbeat(&cfg, &r, &Policy::default()), 1));
+        assert!(pkt.len() < 1400, "{}", pkt.len());
+    }
+
     #[test]
     fn two_nodes_talk_over_udp() {
         let key = crate::crypto::new_key().to_vec();

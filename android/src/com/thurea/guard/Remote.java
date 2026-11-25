@@ -28,6 +28,11 @@ public class Remote extends Activity {
             if (peers != null) Native.meshAddPeers(peers);
             MeshService.start(this);
         }
+        if (i.hasExtra("mesh_debug")) {         // adb shell am start … --ez mesh_debug true
+            Native.policy(this);
+            // In the app's external folder, so adb can read it without root.
+            Native.meshDebug(i.getBooleanExtra("mesh_debug", false), new java.io.File(getExternalFilesDir(null), "mesh.log").getPath());
+        }
         String mode = i.getStringExtra("account_mode");
         if (mode != null) AccountHelper.start(this, mode, i.getStringExtra("email"));
         // The account helper opens Settings itself; otherwise show Thurea's screen.

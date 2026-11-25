@@ -14,6 +14,7 @@ use jni::JNIEnv;
 use serde_json::{json, Value};
 use thurea_core::family::{self, ItemKind, Request, Role};
 use thurea_core::mesh::{Body, Event, Mesh};
+use thurea_core::screen::{self, Clock, UsageReport, Used};
 use thurea_core::net::{self, Host, NodeConfig};
 use thurea_core::status::dns_verdict;
 use thurea_core::{crypto, Check, Policy, Report, State};
@@ -37,6 +38,9 @@ struct Shared {
     stop: Option<Arc<AtomicBool>>,
     /// A parent changed the rules on this phone: push them out now.
     announce: bool,
+    /// This child's use today (from the app's own counting), for the parents.
+    usage: Option<UsageReport>,
+    usage_sent: u64,
 }
 
 fn shared() -> &'static Arc<Mutex<Shared>> {
@@ -51,6 +55,10 @@ fn lock() -> std::sync::MutexGuard<'static, Shared> {
 // ── Plain Rust API (tested on the desktop; the JNI functions below only convert) ──
 
 pub fn init(dir: PathBuf) -> String {
+    // Mesh debugging: create files/debug (adb, root) to get files/mesh.log.
+    if dir.join("debug").exists() {
+        std::env::set_var("THUREA_DEBUG_FILE", dir.join("mesh.log"));
+    }
     let mut s = lock();
     let path = dir.join("policy.json");
     s.policy = Policy::load(&path).unwrap_or_else(|_| {
@@ -122,6 +130,26 @@ fn restart_mesh() {
     }
 }
 
+/// Mesh debugging on or off (from adb, through the DUMP-guarded Remote activity): log to files/mesh.log.
+pub fn mesh_debug(on: bool, log: &str) {
+    let dir = lock().dir.clone();
+    if on {
+        let _ = std::fs::write(dir.join("debug"), "");
+        std::env::set_var("THUREA_DEBUG_FILE", if log.is_empty() { dir.join("mesh.log") } else { PathBuf::from(log) });
+    } else {
+        let _ = std::fs::remove_file(dir.join("debug"));
+        std::env::remove_var("THUREA_DEBUG_FILE");
+    }
+}
+
+/// The debug log's last lines (for adb: Remote shows it as the screen note).
+pub fn mesh_log() -> String {
+    let dir = lock().dir.clone();
+    let t = std::fs::read_to_string(dir.join("mesh.log")).unwrap_or_default();
+    let lines: Vec<&str> = t.lines().collect();
+    lines[lines.len().saturating_sub(40)..].join("\n")
+}
+
 /// Adds peers reached by address ("100.64.0.7", "laptop:47823"), comma separated.
 pub fn mesh_add_peers(list: &str) -> bool {
     let dir = lock().dir.clone();
@@ -178,6 +206,14 @@ impl Host for AndroidHost {
         s.events.push(json!({ "policy_updated": true }));
     }
     fn on_event(&mut self, e: &Event) {
+        if let Event::Usage { report } = e {
+            let s = self.s();
+            let mut all: std::collections::BTreeMap<String, UsageReport> =
+                std::fs::read_to_string(s.dir.join("usage.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+            all.insert(report.device.clone(), report.clone());
+            let _ = std::fs::write(s.dir.join("usage.json"), serde_json::to_string(&all).unwrap());
+            return;
+        }
         if let Event::Request { request } = e {
             let mut s = self.s();
             if s.policy.family.decided(request) || !am_parent(&s.dir, &s.policy) {
@@ -199,8 +235,16 @@ impl Host for AndroidHost {
         std::mem::take(&mut self.s().announce)
     }
     fn outgoing(&mut self) -> Vec<Body> {
-        let s = self.s();
-        open_asks(&s.dir, &s.policy).into_iter().map(Body::Request).collect()
+        let mut s = self.s();
+        let mut out: Vec<Body> = open_asks(&s.dir, &s.policy).into_iter().map(Body::Request).collect();
+        let now = thurea_core::now();
+        if now.saturating_sub(s.usage_sent) >= 60 {
+            if let Some(u) = s.usage.clone() {
+                out.push(Body::Usage(u));
+                s.usage_sent = now;
+            }
+        }
+        out
     }
     fn on_peers(&mut self, mesh: &Mesh) {
         let mut s = self.s();
@@ -328,7 +372,7 @@ pub fn family_json() -> String {
         .iter()
         .map(|(name, r)| {
             let cats: serde_json::Map<String, Value> = r.categories.iter().map(|(c, a)| (c.clone(), json!(*a == family::Access::Allowed))).collect();
-            (name.clone(), json!({ "categories": cats, "allowed_apps": r.allowed_apps, "allowed_sites": r.allowed_sites, "grants": r.grants.iter().filter(|g| g.until > thurea_core::now()).collect::<Vec<_>>(),
+            (name.clone(), json!({ "categories": cats, "allowed_apps": r.allowed_apps, "allowed_sites": r.allowed_sites, "screen": r.screen, "grants": r.grants.iter().filter(|g| g.until > thurea_core::now()).collect::<Vec<_>>(),
                                     "hold_new_apps": r.hold_new_apps, "block_debugging": r.block_debugging }))
         })
         .collect();
@@ -350,18 +394,116 @@ pub fn family_json() -> String {
         "asks": open_asks(&s.dir, &s.policy),
         "join_code": open_asks(&s.dir, &s.policy).iter().find(|r| r.kind == ItemKind::Parent).map(|r| family::match_code(&r.item)),
         "relay": s.policy.relay,
+        "usage": std::fs::read_to_string(s.dir.join("usage.json")).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).unwrap_or(json!({})),
+        "my_usage": s.usage,
     })
     .to_string()
 }
 
 /// What this phone must enforce now (see `thurea_core::family::android_plan`).
-pub fn android_plan(apps_json: &str, known_json: &str) -> String {
-    let s = lock();
+/// `clock_json`: {"day": "YYYY-MM-DD", "minute": local minute of day, "used": {app: minutes},
+/// "labels": {app: name}} — today's use as the app counted it. Empty: no screen time.
+pub fn android_plan(apps_json: &str, known_json: &str, clock_json: &str) -> String {
+    let mut s = lock();
     let me = mesh_file(&s.dir).map(|f| f.id).unwrap_or_default();
     let apps: Vec<String> = serde_json::from_str(apps_json).unwrap_or_default();
     let known: Vec<String> = serde_json::from_str(known_json).unwrap_or_default();
-    let plan = family::android_plan(&s.policy, &me, &apps, &known, thurea_core::now());
+    let c: Value = serde_json::from_str(clock_json).unwrap_or_default();
+    let now = thurea_core::now();
+    let used: Used = serde_json::from_value(c["used"].clone()).unwrap_or_default();
+    let clock = c["day"].as_str().map(|d| Clock { now, day: d.to_string(), minute: c["minute"].as_u64().unwrap_or(0).min(1439) as u16 });
+    let bonus = clock.as_ref().map_or(0, |k| code_bonus(&s.dir, &k.day));
+    let plan = family::android_plan_at(&s.policy, &me, &apps, &known, now, &used, clock.as_ref(), bonus);
+    // Today's use, for the parents (sent with the heartbeats).
+    if let (Some(child), Some(k), Some(sum)) = (&plan.child, &clock, &plan.screen) {
+        let mut top: Vec<(String, String, u32)> = used
+            .iter()
+            .filter(|(_, m)| **m > 0)
+            .map(|(a, m)| (a.clone(), c["labels"][a].as_str().unwrap_or(a).to_string(), *m))
+            .collect();
+        top.sort_by(|a, b| b.2.cmp(&a.2));
+        top.truncate(6);
+        s.usage = Some(UsageReport { device: me.clone(), child: child.clone(), day: k.day.clone(), used: sum.used, allowed: sum.allowed, top, at: now });
+    }
     serde_json::to_string(&plan).unwrap()
+}
+
+// ── Offline codes ──
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct Codes {
+    day: String,
+    minutes: u32,
+    used: Vec<String>,
+    tries: Vec<u64>,
+}
+
+fn code_bonus(dir: &std::path::Path, day: &str) -> u32 {
+    let c: Codes = std::fs::read_to_string(dir.join("codes.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+    if c.day == day { c.minutes } else { 0 }
+}
+
+/// A child types a parent's offline code. Five wrong tries an hour at most.
+pub fn use_code(code: &str, day: &str) -> String {
+    let s = lock();
+    let Some(f) = mesh_file(&s.dir) else { return "! This phone isn't in a household".into() };
+    let Some((child, _)) = s.policy.family.child_of(&f.id) else { return "! This isn't a child's device".into() };
+    let Some(key) = crypto::parse_key(&f.key) else { return "! Household key damaged".into() };
+    let path = s.dir.join("codes.json");
+    let mut c: Codes = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let now = thurea_core::now();
+    c.tries.retain(|t| now.saturating_sub(*t) < 3600);
+    if c.tries.len() >= 5 {
+        return "! Too many wrong codes — try again in an hour".into();
+    }
+    if c.day != day {
+        c = Codes { day: day.into(), tries: c.tries, ..Default::default() };
+    }
+    let digits: String = code.chars().filter(char::is_ascii_digit).collect();
+    let msg = match screen::check_code(&key, &child, day, code) {
+        Some(_) if c.used.contains(&digits) => "! That code was already used".to_string(),
+        Some(m) => {
+            c.minutes += m;
+            c.used.push(digits);
+            format!("✓ {m} more minutes today")
+        }
+        None => {
+            c.tries.push(now);
+            "! That code isn't right (codes work on the day they're made)".to_string()
+        }
+    };
+    let _ = std::fs::write(&path, serde_json::to_string(&c).unwrap());
+    msg
+}
+
+/// On a parent's phone: a code giving `minutes` extra to `child` today.
+pub fn family_code(child: &str, minutes: u32, day: &str) -> String {
+    let s = lock();
+    if !am_parent(&s.dir, &s.policy) {
+        return "! Only a parent's phone makes codes".into();
+    }
+    if !screen::CODE_MINUTES.contains(&minutes) {
+        return "! Codes are for 15, 30, 60 or 120 minutes".into();
+    }
+    match mesh_file(&s.dir).and_then(|f| crypto::parse_key(&f.key)) {
+        Some(k) => screen::offline_code(&k, child, day, minutes),
+        None => "! This phone isn't in a household".into(),
+    }
+}
+
+/// A parent's screen-time change for a child. `what`: daily (minutes, 0 = off), limit (key,
+/// minutes, 0 = off), bedtime ("HH:MM-HH:MM" or "off"), pause (minutes, 0 = resume), lock,
+/// extra (minutes today; `b` = day), always (package, "on"/"off").
+pub fn family_screen(child: &str, what: &str, a: &str, b: &str) -> String {
+    let now = thurea_core::now();
+    // Check first (a bad entry shouldn't produce a signed no-op).
+    if let Err(e) = screen::ScreenTime::default().change(what, a, b, now) {
+        return format!("! {e}");
+    }
+    let (child, what, a, b) = (child.to_string(), what.to_string(), a.to_string(), b.to_string());
+    parent_change(move |p| {
+        let _ = p.family.children.entry(child).or_default().screen.change(&what, &a, &b, now);
+    })
 }
 
 /// A child asks for an app ("app") or a site ("site"). Sent with every heartbeat until answered.
@@ -612,9 +754,9 @@ pub extern "system" fn Java_com_thurea_guard_Native_familyJson<'l>(mut env: JNIE
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_thurea_guard_Native_androidPlan<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, apps: JString<'l>, known: JString<'l>) -> jstring {
-    let (a, k) = (jstr(&mut env, &apps), jstr(&mut env, &known));
-    let r = android_plan(&a, &k);
+pub extern "system" fn Java_com_thurea_guard_Native_androidPlan<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, apps: JString<'l>, known: JString<'l>, clock: JString<'l>) -> jstring {
+    let (a, k, c) = (jstr(&mut env, &apps), jstr(&mut env, &known), jstr(&mut env, &clock));
+    let r = android_plan(&a, &k, &c);
     out(&mut env, r)
 }
 
@@ -675,6 +817,33 @@ pub extern "system" fn Java_com_thurea_guard_Native_familyRelay<'l>(mut env: JNI
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_useCode<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, code: JString<'l>, day: JString<'l>) -> jstring {
+    let (c, d) = (jstr(&mut env, &code), jstr(&mut env, &day));
+    let r = use_code(&c, &d);
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_familyCode<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, child: JString<'l>, minutes: jni::sys::jint, day: JString<'l>) -> jstring {
+    let (c, d) = (jstr(&mut env, &child), jstr(&mut env, &day));
+    let r = family_code(&c, minutes.max(0) as u32, &d);
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_familyScreen<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, child: JString<'l>, what: JString<'l>, a: JString<'l>, b: JString<'l>) -> jstring {
+    let (c, w, x, y) = (jstr(&mut env, &child), jstr(&mut env, &what), jstr(&mut env, &a), jstr(&mut env, &b));
+    let r = family_screen(&c, &w, &x, &y);
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_meshDebug<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, on: jboolean, log: JString<'l>) {
+    let l = jstr(&mut env, &log);
+    mesh_debug(on != 0, &l)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_thurea_guard_Native_familyRevoke<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, child: JString<'l>, item: JString<'l>) -> jstring {
     let (c, i) = (jstr(&mut env, &child), jstr(&mut env, &item));
     let r = family_revoke(&c, &i);
@@ -721,7 +890,7 @@ mod tests {
         assert_eq!(f["parent"], true);
         assert_eq!(f["role"], "child");
         assert_eq!(f["child"], "Sam");
-        let plan: Value = serde_json::from_str(&android_plan(r#"["com.snapchat.android","com.whatsapp"]"#, "[]")).unwrap();
+        let plan: Value = serde_json::from_str(&android_plan(r#"["com.snapchat.android","com.whatsapp"]"#, "[]", "")).unwrap();
         assert_eq!(plan["role"], "child");
         assert_eq!(plan["suspend"][0][0], "com.snapchat.android");
         assert_eq!(plan["dns_host"], thurea_core::family::CHILD_DNS_HOST);
@@ -739,7 +908,7 @@ mod tests {
         assert_eq!(f["inbox"].as_array().unwrap().len(), 1);
         // Approved for 30 minutes: no longer suspended, no longer asked, inbox empty.
         assert!(family_answer(&r.id, true, 30).starts_with('✓'));
-        let plan: Value = serde_json::from_str(&android_plan(r#"["com.snapchat.android"]"#, "[]")).unwrap();
+        let plan: Value = serde_json::from_str(&android_plan(r#"["com.snapchat.android"]"#, "[]", "")).unwrap();
         assert!(plan["suspend"].as_array().unwrap().is_empty());
         assert!(plan["recheck_at"].as_u64().is_some());
         assert!(host.outgoing().is_empty());
@@ -747,13 +916,36 @@ mod tests {
         assert!(f["inbox"].as_array().unwrap().is_empty());
         // Messaging switched off for Sam.
         assert!(family_category("Sam", "messaging", false).starts_with('✓'));
-        let plan: Value = serde_json::from_str(&android_plan(r#"["com.whatsapp"]"#, "[]")).unwrap();
+        let plan: Value = serde_json::from_str(&android_plan(r#"["com.whatsapp"]"#, "[]", "")).unwrap();
         assert_eq!(plan["suspend"][0][0], "com.whatsapp");
         assert_eq!(plan["block_debugging"], true);
         assert!(family_flag("Sam", "block_debugging", false).starts_with('✓'));
         assert!(family_flag("Sam", "nope", false).starts_with('!'));
-        let plan: Value = serde_json::from_str(&android_plan("[]", "[]")).unwrap();
+        let plan: Value = serde_json::from_str(&android_plan("[]", "[]", "")).unwrap();
         assert_eq!(plan["block_debugging"], false);
+        // Screen time: a daily hour; 61 minutes used closes WhatsApp; a parent's code reopens it.
+        assert!(family_category("Sam", "messaging", true).starts_with('✓'));
+        assert!(family_screen("Sam", "daily", "60", "").starts_with('✓'));
+        assert!(family_screen("Sam", "bedtime", "nonsense", "").starts_with('!'));
+        let clock = r#"{"day":"2026-11-25","minute":600,"used":{"com.whatsapp":61},"labels":{"com.whatsapp":"WhatsApp"}}"#;
+        let plan: Value = serde_json::from_str(&android_plan(r#"["com.whatsapp"]"#, r#"["com.whatsapp"]"#, clock)).unwrap();
+        assert_eq!(plan["suspend"][0][1]["why"], "daily_limit");
+        assert_eq!(plan["screen"]["left"], 0);
+        let code = family_code("Sam", 30, "2026-11-25");
+        assert_eq!(code.len(), 7);
+        assert!(use_code(&code, "2026-11-25").contains("30 more"));
+        assert!(use_code(&code, "2026-11-25").contains("already used"));
+        for _ in 0..5 { use_code("000000", "2026-11-25"); }
+        assert!(use_code(&code, "2026-11-25").contains("Too many"));
+        let plan: Value = serde_json::from_str(&android_plan(r#"["com.whatsapp"]"#, r#"["com.whatsapp"]"#, clock)).unwrap();
+        assert!(plan["suspend"].as_array().unwrap().is_empty());
+        // Usage goes to the parents with the heartbeat.
+        let out = host.outgoing();
+        assert!(out.iter().any(|b| matches!(b, Body::Usage(u) if u.used == 61 && u.top[0].1 == "WhatsApp")));
+        assert!(family_screen("Sam", "lock", "", "").starts_with('✓'));
+        let plan: Value = serde_json::from_str(&android_plan("[]", "[]", clock)).unwrap();
+        assert_eq!(plan["lock_seq"], 1);
+        assert!(family_screen("Sam", "daily", "0", "").starts_with('✓'));
         // Relay set by the parent travels with the policy.
         assert!(family_relay("relay.example.org:47830").starts_with('✓'));
         let f: Value = serde_json::from_str(&family_json()).unwrap();

@@ -2,6 +2,9 @@
 <!-- support-transfer-ownership: a phone's current device owner can hand the phone over to Thurea
      (DevicePolicyManager.transferOwnership), so it switches without a factory reset. -->
 <device-admin>
-  <uses-policies/>
+  <uses-policies>
+    <!-- Lock now / bedtime: a parent's lock reaches a child's phone. -->
+    <force-lock/>
+  </uses-policies>
   <support-transfer-ownership/>
 </device-admin>

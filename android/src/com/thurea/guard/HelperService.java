@@ -70,7 +70,34 @@ public class HelperService extends AccessibilityService {
         int visited = 0;
     }
 
+    private static java.lang.ref.WeakReference<HelperService> running = new java.lang.ref.WeakReference<>(null);
+
+    /** Locks the screen through accessibility (works where the device owner can't: phones whose
+     *  device owner was set up before Thurea asked for the "force lock" policy). */
+    static boolean lockScreen() {
+        HelperService h = running.get();
+        return h != null && android.os.Build.VERSION.SDK_INT >= 28 && h.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+    }
+
+    /** Every minute on a child's phone: count, and close what screen time says (off the main thread). */
+    private final Runnable screenTick = new Runnable() {
+        @Override public void run() {
+            if (FamilyMode.prefs(HelperService.this).getBoolean("child", false)) {
+                // The app in front now (after a restart Thurea doesn't know until the next switch).
+                try {
+                    android.view.accessibility.AccessibilityNodeInfo r = getRootInActiveWindow();
+                    if (r != null && r.getPackageName() != null) ScreenTime.foreground(HelperService.this, r.getPackageName().toString());
+                } catch (Exception ignored) {}
+                new Thread(() -> FamilyMode.screenTick(getApplicationContext())).start();
+            }
+            h.postDelayed(this, 60_000);
+        }
+    };
+
     @Override protected void onServiceConnected() {
+        running = new java.lang.ref.WeakReference<>(this);
+        h.removeCallbacks(screenTick);
+        h.postDelayed(screenTick, 30_000);
         wm = getSystemService(WindowManager.class);
         am = getSystemService(AudioManager.class);
         // Watch every app (pinned apps change after this service starts) and drop events from
@@ -215,6 +242,9 @@ public class HelperService extends AccessibilityService {
     @Override public void onAccessibilityEvent(AccessibilityEvent e) {
         if (e == null) return;
         String from = e.getPackageName() == null ? "" : e.getPackageName().toString();
+        // Screen time on a child's phone: which app is in front.
+        if (e.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && FamilyMode.prefs(this).getBoolean("child", false))
+            ScreenTime.foreground(this, from);
         if (!YT.equals(from) && !SETTINGS.equals(from) && !Pins.packages(this).contains(from)) {
             if (!covers.isEmpty()) queueScan(60);     // left YouTube: take the covers down
             return;

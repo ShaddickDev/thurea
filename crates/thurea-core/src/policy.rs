@@ -19,7 +19,12 @@ pub struct Policy {
     pub browser: BrowserRules,
     pub android: AndroidRules,
     /// Parents, children's devices and children's rules. Empty: no family yet.
-    #[serde(default)]
+    ///
+    /// Compatibility rule for every field added after 1.0: `#[serde(default,
+    /// skip_serializing_if = …unset)]`. A parent's signature covers the policy exactly as written
+    /// out, so a field that newer versions write even when unused would invalidate every policy
+    /// signed by an older version (see `older_signatures_keep_verifying`).
+    #[serde(default, skip_serializing_if = "Family::is_unset")]
     pub family: Family,
     /// The household's self-hosted relay ("host:port"), so devices reach each other from
     /// anywhere. Set by a parent; every device learns it with the policy.
@@ -192,11 +197,18 @@ impl Policy {
         }
     }
 
+    /// The version for a parent's change: the time, or one more than now if that's higher. Two
+    /// parents changing things at once on devices that can't reach each other: the later change
+    /// wins everywhere (not a random one).
+    fn next_version(current: u64) -> u64 {
+        (current + 1).max(crate::now())
+    }
+
     /// A parent's change: applies `edit`, raises the version and signs.
     pub fn parent_edit(&mut self, parent_secret: &str, edit: impl FnOnce(&mut Policy)) -> Result<(), String> {
         let mut next = self.clone();
         edit(&mut next);
-        next.version = self.version + 1;
+        next.version = Self::next_version(self.version);
         next.sign(parent_secret)?;
         next.validate()?;
         *self = next;
@@ -216,7 +228,7 @@ impl Policy {
         if !next.family.is_parent(&key) {
             next.family.parents.push(crate::family::Parent { name: name.into(), key });
         }
-        next.version = self.version + 1;
+        next.version = Self::next_version(self.version);
         next.sign(&signer)?;
         *self = next;
         Ok(())
@@ -396,6 +408,26 @@ mod tests {
         // Signatures survive the JSON round trip.
         let back = Policy::from_json(&by_dad.to_json()).unwrap();
         assert!(two.accepts(&back).is_ok());
+    }
+
+    /// A policy signed by a version that didn't know about newer fields must still verify:
+    /// unused new fields aren't written out, so the signed bytes come out the same.
+    #[test]
+    fn older_signatures_keep_verifying() {
+        let (mum, _) = crypto::new_parent_key();
+        let mut p = Policy::default();
+        p.add_parent("Mum", &mum, None).unwrap();
+        p.parent_edit(&mum, |x| x.family.set_role("kid", "Kid", crate::family::Role::Child, Some("Sam"))).unwrap();
+        let json = p.to_json();
+        // What a 1.0-era policy looks like: nothing about screen time, relays or parent requests.
+        for k in ["\"screen\"", "\"relay\""] {
+            assert!(!json.contains(k), "{k} written out while unused");
+        }
+        // Round trip through JSON (as it travels) and check the signature again.
+        let back = Policy::from_json(&json).unwrap();
+        assert!(Policy::default().accepts(&back).is_ok());
+        // No family at all: nothing written.
+        assert!(!Policy::default().to_json().contains("\"family\""));
     }
 
     #[test]
