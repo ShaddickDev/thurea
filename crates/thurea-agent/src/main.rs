@@ -3,6 +3,7 @@
 mod adopt;
 mod config;
 mod daemon;
+mod control;
 mod family;
 mod platform;
 mod prefs;
@@ -39,6 +40,7 @@ Set up (as root / Administrator):
   thurea pair-android [--name N] [--peers ADDR,...]
                                    Join the USB-connected Android phone that already has Thurea
   thurea add-peer ADDRESS          Also reach a device by address (e.g. a Tailscale IP)
+  thurea set-relay HOST:PORT|off   Reach the household through its relay (before the family policy names one)
   thurea code                      Show the pairing code again
 
 Every day:
@@ -123,15 +125,24 @@ fn dispatch(args: &[String]) -> Result<String, String> {
                 Policy::default().save(&config::policy_path()).map_err(|e| e.to_string())?;
             }
             Ok(format!(
-                "{} is in the household as \"{}\".\n\nPairing code (keep it secret — it lets a device join):\n  {}\n\nNext: sudo thurea install",
+                "{} is in the household as \"{}\".\n\nPairing code (keep it secret — it lets a device join):\n  {}\n\n{}",
                 if cmd == "join" { "This computer" } else { "A new household was created. This computer" },
                 cfg.name,
-                cfg.pairing_code()
+                cfg.pairing_code(),
+                platform::start_mesh_service()
             ))
         }
         "code" => {
             need_admin_for_config()?;
             Ok(Config::load()?.pairing_code())
+        }
+        "set-relay" => {
+            need_admin_for_config()?;
+            let mut c = Config::load()?;
+            let a = arg.ok_or("usage: thurea set-relay HOST:PORT|off")?;
+            c.relay = if a == "off" { None } else { Some(a.clone()) };
+            c.save()?;
+            Ok(format!("Relay {}. Restart the service (or wait for it) to use it; a parent can also set it for every device with `thurea family relay`.", if a == "off" { "off".into() } else { a }))
         }
         "add-peer" => {
             need_admin_for_config()?;
@@ -201,29 +212,43 @@ fn dispatch(args: &[String]) -> Result<String, String> {
             Ok(r.render())
         }
         "run" => {
-            need_admin()?;
-            daemon::run().map(|_| String::new())
-        }
-        "family" => {
             need_admin_for_config()?;
-            family::run(args)
+            daemon::run(args.iter().any(|a| a == "--mesh-only")).map(|_| String::new())
+        }
+        "family" => family::run(args),
+        "control-center" => control::run(),
+        "relay" => {
+            let port: u16 = flag(args, "--port").map(|p| p.parse().map_err(|_| "port must be a number")).transpose()?.unwrap_or(thurea_core::relay::PORT);
+            let stop = std::sync::atomic::AtomicBool::new(false);
+            thurea_core::relay::serve(([0, 0, 0, 0], port).into(), &stop, &mut |l| eprintln!("{l}")).map_err(|e| e.to_string())?;
+            Ok(String::new())
         }
         "status" => status(),
         "watch" => daemon::watch().map(|_| String::new()),
         "block" | "unblock" => {
-            need_admin_for_config()?;
             let site = arg.ok_or(format!("usage: thurea {cmd} SITE"))?;
-            let mut p = config::load_policy();
-            let changed = if cmd == "block" { p.block(&site)? } else { p.unblock(&site) };
+            let block = cmd == "block";
+            let current = family::current_policy();
+            let mut p = current.clone();
+            let changed = if block { p.block(&site)? } else { p.unblock(&site) };
             if !changed {
-                return Ok(if cmd == "block" { format!("{site} is already blocked") } else { format!("{site} isn't on the list (only exact entries can be removed)") });
+                return Ok(if block { format!("{site} is already blocked") } else { format!("{site} isn't on the list (only exact entries can be removed)") });
             }
-            let p = family::save_signed(&config::load_policy(), p)?;
-            Ok(format!(
-                "{} {site}. Policy is now version {}; every device in the household picks it up within a minute.",
-                if cmd == "block" { "Blocked" } else { "Unblocked" },
-                p.version
-            ))
+            let done = if block { "Blocked" } else { "Unblocked" };
+            if current.family.parents.is_empty() {
+                need_admin_for_config()?;
+                p.save(&config::policy_path()).map_err(|e| e.to_string())?;
+                return Ok(format!("{done} {site}. Policy is now version {}; every device in the household picks it up within a minute.", p.version));
+            }
+            // A family: only a parent can, and signs it.
+            family::change(|p| {
+                if block {
+                    let _ = p.block(&site);
+                } else {
+                    p.unblock(&site);
+                }
+            })
+            .map(|m| format!("{done} {site}. {m}"))
         }
         "check" => {
             let site = arg.ok_or("usage: thurea check SITE")?;

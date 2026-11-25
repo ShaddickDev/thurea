@@ -58,7 +58,7 @@ for app in /usr/lib/firefox /usr/lib/firefox-developer-edition /usr/lib/firefox-
 done
 
 # 5. Keep the watchers running (and the daily self-update).
-for u in thurea.timer thurea.path thurea-extensions.service thurea-update.timer; do
+for u in thurea.timer thurea.path thurea-extensions.service thurea-update.timer thurea-mesh.service; do
   systemctl is-enabled -q "$u" 2>/dev/null || systemctl enable -q "$u" 2>/dev/null || true
   systemctl is-active -q "$u" 2>/dev/null || systemctl start "$u" 2>/dev/null || true
 done
@@ -69,6 +69,8 @@ done
 if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
   for net in 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12; do
     ufw status 2>/dev/null | grep -qE "^47824/tcp +ALLOW +$net" || ufw allow proto tcp from "$net" to any port 47824 comment 'Thurea phone setup' >/dev/null 2>&1 || true
+    # The household mesh: devices on the home network find each other on UDP 47823.
+    ufw status 2>/dev/null | grep -qE "^47823/udp +ALLOW +$net" || ufw allow proto udp from "$net" to any port 47823 comment 'Thurea household' >/dev/null 2>&1 || true
   done
 fi
 

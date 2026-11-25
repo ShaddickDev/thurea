@@ -236,3 +236,18 @@ pub fn notify(text: &str, _urgent: bool) {
     eprintln!("thurea: {text}");
     let _ = std::process::Command::new("msg").args(["*", "/TIME:120", &format!("Thurea: {text}")]).status();
 }
+
+/// The submit folder: every user may add files (the service checks parents' signatures).
+pub fn open_submit_dir(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let _ = std::process::Command::new("icacls").arg(dir).args(["/grant", "*S-1-5-32-545:(OI)(CI)(W,RD)"]).output();
+    Ok(())
+}
+
+/// After joining a household: start the mesh task, if Thurea is installed.
+pub fn start_mesh_service() -> String {
+    match powershell("Start-ScheduledTask -TaskPath '\\Thurea\\' -TaskName 'Thurea Mesh' -ErrorAction Stop") {
+        Ok(_) => "Thurea's household service is running.".into(),
+        Err(_) => "Next: thurea install (runs Thurea at startup)".into(),
+    }
+}

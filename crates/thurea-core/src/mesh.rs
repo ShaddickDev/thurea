@@ -156,6 +156,9 @@ impl Event {
             Event::PeerSilent { name, seconds, .. } => format!("{name} has not checked in for {} min — Thurea may be off there", seconds / 60),
             Event::PeerBack { name, .. } => format!("{name} is back online"),
             Event::AdoptPolicy { policy, .. } => format!("Family policy updated to version {}", policy.version),
+            Event::Request { request } if request.kind == crate::family::ItemKind::Parent => {
+                format!("{} wants to be a parent on this family (code {})", request.label, crate::family::match_code(&request.item))
+            }
             Event::Request { request } => format!("{} asks for {}", request.child, request.label),
             Event::SendPolicy { .. } | Event::RequestPolicy { .. } => return None,
         })
@@ -322,7 +325,7 @@ impl Mesh {
             Body::Request(r) => {
                 // Only from the device it names, only once per request, and not if answered.
                 let seen = peer.requests_seen.contains(&r.id);
-                if r.device == peer.id && !seen && !policy.family.decided(&r) && policy.family.child_of(&r.device).is_some() {
+                if r.device == peer.id && !seen && !policy.family.decided(&r) && policy.family.acceptable(&r) {
                     peer.requests_seen.push(r.id.clone());
                     if peer.requests_seen.len() > 100 {
                         peer.requests_seen.remove(0);

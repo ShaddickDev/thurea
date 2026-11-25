@@ -407,6 +407,7 @@ namespace Thurea
             menu.Items.Add(verseItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Open Thurea", null, delegate { ShowMain(); });
+            menu.Items.Add("Family...", null, delegate { OpenFamily(); });
             menu.Items.Add("Set up a phone...", null, delegate { ShowPhone(); });
             menu.Items.Add("Get Thurea on another device...", null, delegate { ShowShare(); });
             menu.Items.Add("Re-apply protection now", null, delegate { Reapply(); });
@@ -451,6 +452,16 @@ namespace Thurea
             }
             else { if (main.WindowState == FormWindowState.Minimized) main.WindowState = FormWindowState.Normal; main.Activate(); }
             main.Render(Status.Read());
+        }
+
+        /// The parents' control center (a page served by thurea.exe on this PC only, opened in the browser).
+        public void OpenFamily()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(Path.Combine(Paths.Home, "thurea.exe"), "control-center") { UseShellExecute = false, CreateNoWindow = true });
+            }
+            catch (Exception e) { MessageBox.Show("Couldn't open the family control center: " + e.Message, "Thurea"); }
         }
 
         public void ShowPhone() { ShowPhone(false); }
@@ -540,11 +551,13 @@ namespace Thurea
             verseCard.Controls.Add(verseRef);
             home.Controls.Add(verseCard);
 
-            var actions = new FlowLayoutPanel { Width = W, Height = 50, BackColor = Color.Transparent, Margin = new Padding(0, 10, 0, 0) };
+            var actions = new FlowLayoutPanel { Width = W, Height = 96, BackColor = Color.Transparent, Margin = new Padding(0, 10, 0, 0) };
             var phoneBtn = Theme.Button("Set up a phone", true); phoneBtn.Width = 150; phoneBtn.Click += delegate { tray.ShowPhone(); };
             var shareBtn = Theme.Button("Another device", false); shareBtn.Width = 140; shareBtn.Click += delegate { tray.ShowShare(); };
             var applyBtn = Theme.Button("Re-apply", false); applyBtn.Width = 130; applyBtn.Click += delegate { tray.Reapply(); };
-            actions.Controls.AddRange(new Control[] { phoneBtn, shareBtn, applyBtn });
+            // Parents' control center: children's requests, rules, devices (thurea.exe control-center).
+            var familyBtn = Theme.Button("Family", false); familyBtn.Width = 150; familyBtn.Click += delegate { tray.OpenFamily(); };
+            actions.Controls.AddRange(new Control[] { phoneBtn, shareBtn, applyBtn, familyBtn });
             home.Controls.Add(actions);
 
             var settingsHeader = new Panel { Width = W, Height = 48, Margin = Padding.Empty };

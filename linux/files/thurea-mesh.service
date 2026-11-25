@@ -1,0 +1,14 @@
+[Unit]
+Description=Thurea: keeps this computer in the household (mesh, relay, parents' changes)
+After=network-online.target
+Wants=network-online.target
+# Only once this computer is in a household (sudo thurea init / join).
+ConditionPathExists=/etc/thurea/config.json
+
+[Service]
+ExecStart=/usr/bin/thurea run --mesh-only
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

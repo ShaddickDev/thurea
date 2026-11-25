@@ -35,6 +35,8 @@ struct Shared {
     running: bool,
     /// Tells the running mesh thread to stop (re-pairing, new peers).
     stop: Option<Arc<AtomicBool>>,
+    /// A parent changed the rules on this phone: push them out now.
+    announce: bool,
 }
 
 fn shared() -> &'static Arc<Mutex<Shared>> {
@@ -193,6 +195,9 @@ impl Host for AndroidHost {
             self.s().events.push(json!({ "text": text, "warning": e.is_warning() }));
         }
     }
+    fn tick(&mut self) -> bool {
+        std::mem::take(&mut self.s().announce)
+    }
     fn outgoing(&mut self) -> Vec<Body> {
         let s = self.s();
         open_asks(&s.dir, &s.policy).into_iter().map(Body::Request).collect()
@@ -323,7 +328,7 @@ pub fn family_json() -> String {
         .iter()
         .map(|(name, r)| {
             let cats: serde_json::Map<String, Value> = r.categories.iter().map(|(c, a)| (c.clone(), json!(*a == family::Access::Allowed))).collect();
-            (name.clone(), json!({ "categories": cats, "allowed_apps": r.allowed_apps, "allowed_sites": r.allowed_sites, "grants": r.grants,
+            (name.clone(), json!({ "categories": cats, "allowed_apps": r.allowed_apps, "allowed_sites": r.allowed_sites, "grants": r.grants.iter().filter(|g| g.until > thurea_core::now()).collect::<Vec<_>>(),
                                     "hold_new_apps": r.hold_new_apps, "block_debugging": r.block_debugging }))
         })
         .collect();
@@ -337,8 +342,14 @@ pub fn family_json() -> String {
         "child": child.as_ref().map(|(n, _)| n.clone()),
         "devices": fam.devices,
         "children": children,
-        "inbox": inbox,
+        "inbox": inbox.iter().map(|r| {
+            let mut v = serde_json::to_value(r).unwrap();
+            if r.kind == ItemKind::Parent { v["code"] = json!(family::match_code(&r.item)); }
+            v
+        }).collect::<Vec<_>>(),
         "asks": open_asks(&s.dir, &s.policy),
+        "join_code": open_asks(&s.dir, &s.policy).iter().find(|r| r.kind == ItemKind::Parent).map(|r| family::match_code(&r.item)),
+        "relay": s.policy.relay,
     })
     .to_string()
 }
@@ -378,6 +389,47 @@ pub fn ask(kind: &str, item: &str, label: &str) -> String {
     "✓ Asked — a parent will see it".into()
 }
 
+/// Asks the family's parents to make this phone a parent's too. Returns a message with the
+/// match code the approving parent will see.
+pub fn family_join(name: &str) -> String {
+    let s = lock();
+    let me = mesh_file(&s.dir).map(|f| f.id).unwrap_or_default();
+    if me.is_empty() {
+        return "! Join the household first".into();
+    }
+    if s.policy.family.parents.is_empty() {
+        return "! There's no family yet — start one".into();
+    }
+    if am_parent(&s.dir, &s.policy) {
+        return "✓ This phone is already a parent's".into();
+    }
+    let secret = parent_secret(&s.dir).unwrap_or_else(|| {
+        let (sk, _) = crypto::new_parent_key();
+        let _ = std::fs::write(s.dir.join("parent.key"), &sk);
+        sk
+    });
+    let key = crypto::parent_public(&secret).unwrap();
+    let code = family::match_code(&key);
+    let mut asks = open_asks(&s.dir, &s.policy);
+    if !asks.iter().any(|r| r.kind == ItemKind::Parent) {
+        let name = if name.trim().is_empty() { "Parent" } else { name.trim() };
+        asks.push(Request::new(&me, "", ItemKind::Parent, &key, name, thurea_core::now()));
+        write_list(&s.dir, "asks.json", &asks);
+    }
+    drop(s);
+    restart_mesh();
+    format!("✓ Asked — on a parent's device, approve the request showing {code}")
+}
+
+/// Sets (or clears, with "") the household's relay. Parents only.
+pub fn family_relay(addr: &str) -> String {
+    let a = addr.trim().to_string();
+    if !a.is_empty() && !a.contains(':') && a.parse::<std::net::IpAddr>().is_err() && !a.contains('.') {
+        return "! That doesn't look like an address (host or host:port)".into();
+    }
+    parent_change(|p| p.relay = if a.is_empty() { None } else { Some(a) })
+}
+
 /// A parent's change: signs with this phone's parent key, saves, and lets the app re-apply.
 fn parent_change(edit: impl FnOnce(&mut Policy)) -> String {
     let mut s = lock();
@@ -390,6 +442,7 @@ fn parent_change(edit: impl FnOnce(&mut Policy)) -> String {
         return format!("! Couldn't save: {e}");
     }
     s.policy = p;
+    s.announce = true;
     s.events.push(json!({ "policy_updated": true }));
     "✓ Done — your family's devices follow within seconds".into()
 }
@@ -415,6 +468,7 @@ pub fn family_create(name: &str) -> String {
     }
     let _ = p.save(&s.dir.join("policy.json"));
     s.policy = p;
+    s.announce = true;
     s.events.push(json!({ "policy_updated": true }));
     format!("✓ Family started — {name} is a parent")
 }
@@ -430,14 +484,7 @@ pub fn family_answer(id: &str, approve: bool, minutes: i64) -> String {
     let dir = lock().dir.clone();
     let Some(r) = read_list::<Request>(&dir, "inbox.json").into_iter().find(|r| r.id == id) else { return "! That request is gone".into() };
     let now = thurea_core::now();
-    let msg = parent_change(|p| {
-        let rules = p.family.children.entry(r.child.clone()).or_default();
-        if approve {
-            rules.approve(&r, (minutes > 0).then_some(minutes as u64), now);
-        } else {
-            rules.decline(&r, now);
-        }
-    });
+    let msg = parent_change(|p| p.family.answer(&r, approve, (minutes > 0).then_some(minutes as u64), now));
     if msg.starts_with('✓') {
         let left: Vec<Request> = read_list::<Request>(&dir, "inbox.json").into_iter().filter(|x| x.id != id).collect();
         write_list(&dir, "inbox.json", &left);
@@ -614,6 +661,20 @@ pub extern "system" fn Java_com_thurea_guard_Native_familyFlag<'l>(mut env: JNIE
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_familyJoin<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, name: JString<'l>) -> jstring {
+    let n = jstr(&mut env, &name);
+    let r = family_join(&n);
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_familyRelay<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, addr: JString<'l>) -> jstring {
+    let a = jstr(&mut env, &addr);
+    let r = family_relay(&a);
+    out(&mut env, r)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_thurea_guard_Native_familyRevoke<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, child: JString<'l>, item: JString<'l>) -> jstring {
     let (c, i) = (jstr(&mut env, &child), jstr(&mut env, &item));
     let r = family_revoke(&c, &i);
@@ -693,6 +754,12 @@ mod tests {
         assert!(family_flag("Sam", "nope", false).starts_with('!'));
         let plan: Value = serde_json::from_str(&android_plan("[]", "[]")).unwrap();
         assert_eq!(plan["block_debugging"], false);
+        // Relay set by the parent travels with the policy.
+        assert!(family_relay("relay.example.org:47830").starts_with('✓'));
+        let f: Value = serde_json::from_str(&family_json()).unwrap();
+        assert_eq!(f["relay"], "relay.example.org:47830");
+        assert!(family_relay("").starts_with('✓'));
+        assert!(family_join("Dad").contains("already"));
         // The saved policy is parent-signed and a fresh device accepts it.
         let saved = Policy::load(&dir.join("policy.json")).unwrap();
         assert!(Policy::default().accepts(&saved).is_ok());

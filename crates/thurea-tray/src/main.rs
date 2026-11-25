@@ -292,6 +292,14 @@ mod tray {
                 StandardItem { label: self.line.clone(), enabled: false, ..Default::default() }.into(),
                 MenuItem::Separator,
                 StandardItem { label: "Open Thurea".into(), activate: Box::new(|t: &mut Self| open_window(&t.app, "")), ..Default::default() }.into(),
+                StandardItem {
+                    label: "Family…".into(),
+                    activate: Box::new(|_| {
+                        let _ = Command::new("thurea").arg("control-center").stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+                    }),
+                    ..Default::default()
+                }
+                .into(),
                 StandardItem { label: "Set up a phone…".into(), activate: Box::new(|t: &mut Self| open_window(&t.app, "#phone")), ..Default::default() }.into(),
                 StandardItem {
                     label: "Re-apply protection now".into(),

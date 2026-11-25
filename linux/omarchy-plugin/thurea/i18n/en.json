@@ -7,6 +7,7 @@
   "section.settings": "Settings",
   "action.setupPhone": "Set up a phone",
   "action.reapply": "Re-apply",
+  "action.family": "Family",
   "action.reapplying": "Re-applying protection…",
   "action.reapplied": "Protection re-applied.",
   "action.reapplyFailed": "Couldn't re-apply (not authorised?). Thurea re-applies by itself every 5 minutes.",

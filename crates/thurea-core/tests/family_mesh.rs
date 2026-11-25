@@ -35,6 +35,20 @@ fn node(policy: &Policy) -> Node {
 
 #[test]
 fn child_asks_parent_answers_over_udp() {
+    family_flow(None);
+}
+
+/// Same, but the devices can't reach each other directly: only through a relay.
+#[test]
+fn child_asks_parent_answers_through_the_relay() {
+    let stop = Arc::new(AtomicBool::new(false));
+    let s = stop.clone();
+    std::thread::spawn(move || thurea_core::relay::serve("127.0.0.1:47935".parse().unwrap(), &s, &mut |_| {}).unwrap());
+    family_flow(Some("127.0.0.1:47935"));
+    stop.store(true, Ordering::Relaxed);
+}
+
+fn family_flow(relay: Option<&str>) {
     let key = crypto::new_key().to_vec();
     let (mum, _) = crypto::new_parent_key();
     let mut fam = Policy::default();
@@ -44,13 +58,15 @@ fn child_asks_parent_answers_over_udp() {
     let parent = node(&fam);
     let child = node(&Policy::default()); // learns the family over the mesh
     let stop = Arc::new(AtomicBool::new(false));
-    let (pp, cp) = (47931u16, 47932u16);
+    let (pp, cp) = if relay.is_some() { (47933u16, 47934u16) } else { (47931u16, 47932u16) };
     for (id, port, peer, host) in [("mum", pp, cp, parent.clone()), ("kid", cp, pp, child.clone())] {
         let mut cfg = NodeConfig::new(id.into(), id.into(), "test", key.clone());
         cfg.port = port;
         cfg.bind = [127, 0, 0, 1].into();
         cfg.broadcast = false;
-        cfg.peers = vec![format!("127.0.0.1:{peer}")];
+        // Through the relay only: no direct route at all.
+        cfg.peers = if relay.is_some() { Vec::new() } else { vec![format!("127.0.0.1:{peer}")] };
+        cfg.relay = relay.map(String::from);
         cfg.heartbeat_every = Duration::from_millis(300);
         let stop = stop.clone();
         let mut h = host;

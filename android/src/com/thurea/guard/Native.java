@@ -36,6 +36,10 @@ final class Native {
     static native String familyAnswer(String requestId, boolean approve, int minutes);
     static native String familyCategory(String child, String category, boolean allowed);
     static native String familyRevoke(String child, String item);
+    /** Ask the family's parents to make this phone a parent's (shows a match code). */
+    static native String familyJoin(String name);
+    /** The household's self-hosted relay ("host:port"; "" = none). Parents only. */
+    static native String familyRelay(String addr);
     /** flag: "hold_new_apps" or "block_debugging". */
     static native String familyFlag(String child, String flag, boolean on);
     static native boolean meshStart();

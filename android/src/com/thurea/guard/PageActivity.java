@@ -105,7 +105,14 @@ public class PageActivity extends Activity {
         if (!f.optBoolean("parent")) {
             LinearLayout c = Ui.card(this);
             c.addView(Ui.title(this, "Part of a family", 17));
-            c.addView(Ui.text(this, "Parents: " + join(f.optJSONArray("parents")) + ". Only their phones can change the family's rules.", 14, Ui.MUTED), Ui.gapTop(this, 6));
+            c.addView(Ui.text(this, "Parents: " + join(f.optJSONArray("parents")) + ". Only their devices can change the family's rules.", 14, Ui.MUTED), Ui.gapTop(this, 6));
+            String code = f.optString("join_code", "");
+            if (!code.isEmpty() && !"null".equals(code)) {
+                c.addView(Ui.text(this, "Waiting for a parent to approve this phone. They'll see the code " + code + " — check it matches.", 14, Ui.TEXT), Ui.gapTop(this, 12));
+            } else {
+                c.addView(Ui.button(this, "I'm a parent too", false, Ui.ACCENT, () ->
+                    ask("Your name", "e.g. Dad", "", name -> famDo(() -> Native.familyJoin(name)))), Ui.gapTop(this, 14));
+            }
             col.addView(c);
             return;
         }
@@ -119,7 +126,17 @@ public class PageActivity extends Activity {
             org.json.JSONObject r = inbox.optJSONObject(i);
             if (i > 0) rl.addView(Ui.divider(this));
             String id = r.optString("id");
-            String what = r.optString("label") + ("site".equals(r.optString("kind")) ? " (website)" : "");
+            if ("parent".equals(r.optString("what"))) {
+                String code = r.optString("code");
+                rl.addView(Ui.row(this, "👪", r.optString("label") + " wants to be a parent",
+                    "Code " + code + " · tap to answer", () ->
+                    new AlertDialog.Builder(this).setTitle(r.optString("label") + " as a parent?")
+                        .setMessage("Only approve if their device shows the code " + code + ". A parent can change every rule for the children.")
+                        .setPositiveButton("Approve", (d, w) -> famDo(() -> Native.familyAnswer(id, true, 0)))
+                        .setNegativeButton("Decline", (d, w) -> famDo(() -> Native.familyAnswer(id, false, 0))).show()));
+                continue;
+            }
+            String what = r.optString("label") + ("site".equals(r.optString("what")) ? " (website)" : "");
             rl.addView(Ui.row(this, "🙋", r.optString("child") + " asks for " + what,
                 DateUtils.getRelativeTimeSpanString(r.optLong("at") * 1000) + " · tap to answer", () ->
                 new AlertDialog.Builder(this).setTitle(r.optString("child") + ": " + what)
@@ -205,6 +222,14 @@ public class PageActivity extends Activity {
                     }).show()));
         }
         col.addView(dl);
+        // Reach the family from anywhere: the household's own relay.
+        col.addView(Ui.section(this, "Away from home"));
+        LinearLayout rr = Ui.list(this);
+        String relay = f.isNull("relay") ? "" : f.optString("relay", "");
+        rr.addView(Ui.row(this, "🛰", "Relay", relay.isEmpty() ? "Not set — requests only reach you on the home network" : relay + " · tap to change", () ->
+            ask("Relay address", "relay.example.org:47830 (blank = none)", relay, a -> famDo(() -> Native.familyRelay(a)))));
+        col.addView(rr);
+
         TextView hint = Ui.text(this, "A child's device gets YouTube Restricted Mode, family DNS, social media blocked until you approve, new apps held until you approve, and no factory reset.", 13, Ui.MUTED);
         hint.setPadding(Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6), 0);
         col.addView(hint);
@@ -249,7 +274,7 @@ public class PageActivity extends Activity {
             ask("Which website?", "example.com", "", site -> { if (!site.isEmpty()) famDo(() -> { String m = Native.ask("site", site, site); Native.meshStart(); return m; }); })));
         for (int i = 0; asks != null && i < asks.length(); i++) {
             org.json.JSONObject r = asks.optJSONObject(i);
-            if (!"site".equals(r.optString("kind"))) continue;
+            if (!"site".equals(r.optString("what"))) continue;
             w.addView(Ui.divider(this));
             w.addView(Ui.row(this, "⏳", r.optString("label"), "Asked, waiting for a parent", null));
         }

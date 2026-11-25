@@ -21,6 +21,10 @@ pub struct Policy {
     /// Parents, children's devices and children's rules. Empty: no family yet.
     #[serde(default)]
     pub family: Family,
+    /// The household's self-hosted relay ("host:port"), so devices reach each other from
+    /// anywhere. Set by a parent; every device learns it with the policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<String>,
     /// A parent's signature over everything above. Required once the family has a parent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<Signature>,
@@ -100,6 +104,7 @@ impl Default for Policy {
                 ]),
             },
             family: Family::default(),
+            relay: None,
             signature: None,
         }
     }

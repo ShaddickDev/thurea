@@ -447,7 +447,7 @@ function Start-TrayForUsers {
 # ---------- uninstall block ----------
 # Thurea's scheduled tasks: if one is deleted or disabled, the others put it back (Apply runs every
 # 5 minutes, Watch every hour and at every sign-in, Update daily).
-$Tasks = @('Thurea', 'Thurea Extensions', 'Thurea Update', 'Thurea Watch')
+$Tasks = @('Thurea', 'Thurea Extensions', 'Thurea Update', 'Thurea Watch', 'Thurea Mesh')
 function Test-Tasks {
     foreach ($t in $Tasks) {
         $x = Get-ScheduledTask -TaskPath '\Thurea\' -TaskName $t -ErrorAction SilentlyContinue
@@ -519,6 +519,12 @@ function Register-Tasks {
     $act3 = New-ScheduledTaskAction -Execute $ps -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$me`" -Update"
     Register-ScheduledTask -TaskName 'Thurea Update' -TaskPath '\Thurea\' -Action $act3 -Trigger @($daily, $late) -Principal $sys -Settings $set -Force | Out-Null
 
+    # Household mesh (thurea.exe): keeps this PC in the family, passes parents' changes on. Starts
+    # at startup and every 5 minutes (it exits at once until the PC is in a household).
+    $set4 = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+    $act4 = New-ScheduledTaskAction -Execute (Join-Path $Home_ 'thurea.exe') -Argument 'run --mesh-only'
+    Register-ScheduledTask -TaskName 'Thurea Mesh' -TaskPath '\Thurea\' -Action $act4 -Trigger @($boot, $every) -Principal $sys -Settings $set4 -Force | Out-Null
+
     # Watch: every hour and at every sign-in, re-applies (and so puts back any task that's gone).
     $hourly = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Hours 1)
     $logon = New-ScheduledTaskTrigger -AtLogOn
@@ -560,6 +566,8 @@ function Invoke-Install {
         & netsh http add urlacl url=http://+:47824/ sddl='D:(A;;GX;;;BU)' | Out-Null
         Get-NetFirewallRule -DisplayName 'Thurea - share with your devices' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
         New-NetFirewallRule -DisplayName 'Thurea - share with your devices' -Group 'Thurea' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 47824 -Profile Private | Out-Null
+        Get-NetFirewallRule -DisplayName 'Thurea - household' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+        New-NetFirewallRule -DisplayName 'Thurea - household' -Group 'Thurea' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 47823 -Profile Private | Out-Null
     }
     Log "Thurea $((Get-Content (Join-Path $Home_ 'VERSION') -Raw).Trim()) installed in $Home_"
     Invoke-Apply

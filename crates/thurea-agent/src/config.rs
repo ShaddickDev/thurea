@@ -21,6 +21,9 @@ pub struct Config {
     /// Find household devices on this network by broadcast. Off: only `peers` are contacted.
     #[serde(default = "yes")]
     pub lan_broadcast: bool,
+    /// The household's relay, until the family policy names one ("host:port").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<String>,
 }
 
 fn yes() -> bool {
@@ -62,10 +65,19 @@ pub fn policy_path() -> PathBuf {
 pub fn state_path() -> PathBuf {
     state_dir().join("state.json")
 }
+/// A readable copy of the family policy (nothing in it is secret), for parents' control centers.
+pub fn public_policy_path() -> PathBuf {
+    state_dir().join("policy.json")
+}
+/// Where anyone may drop a parent-signed policy or a "make me a parent" request; the service
+/// only takes what a parent's signature allows.
+pub fn submit_dir() -> PathBuf {
+    state_dir().join("submit")
+}
 
 impl Config {
     pub fn new(name: String, key: &[u8]) -> Self {
-        Config { id: crypto::new_device_id(), name, key: crypto::hex(key), peers: Vec::new(), port: default_port(), lan_broadcast: true }
+        Config { id: crypto::new_device_id(), name, key: crypto::hex(key), peers: Vec::new(), port: default_port(), lan_broadcast: true, relay: None }
     }
 
     pub fn load() -> Result<Self, String> {

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thurea · Family</title>
+<style>
+  :root {
+    --bg: #121318; --card: #1d1f27; --line: #2a2d38; --text: #e8eaf0; --muted: #9aa0aa;
+    --accent: #8ac8ff; --accent-ink: #0b1b2b; --good: #4ade80; --warn: #f5a524; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  h1 { font-size: 28px; margin: 0; letter-spacing: -0.01em; }
+  h1 small { color: var(--muted); font-weight: 500; font-size: 17px; margin-left: 6px; }
+  #household { color: var(--muted); font-size: 13px; }
+  h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 28px 6px 10px; font-weight: 600; }
+  .card { background: var(--card); border-radius: 18px; padding: 18px 20px; }
+  .list { background: var(--card); border-radius: 18px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row .main { flex: 1; min-width: 0; }
+  .row .title { font-weight: 600; }
+  .row .sub { color: var(--muted); font-size: 13px; }
+  .icon { width: 40px; height: 40px; border-radius: 50%; background: #262935; display: grid; place-items: center; font-size: 19px; flex: none; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  button { font: inherit; border: 0; border-radius: 999px; padding: 8px 14px; cursor: pointer; background: #2a2e3a; color: var(--text); font-weight: 600; font-size: 13px; }
+  button:hover { filter: brightness(1.15); }
+  button.primary { background: var(--accent); color: var(--accent-ink); }
+  button.danger { background: transparent; color: var(--bad); box-shadow: inset 0 0 0 1px #4a2c30; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=text] { font: inherit; background: #15171d; color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; min-width: 0; }
+  .inline { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .inline input { flex: 1; }
+  .switch { position: relative; width: 44px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch span { position: absolute; inset: 0; background: #3a3e4a; border-radius: 999px; transition: background .15s; cursor: pointer; }
+  .switch span::after { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; border-radius: 50%; background: #cfd3dc; transition: transform .15s; }
+  .switch input:checked + span { background: #3b6e98; }
+  .switch input:checked + span::after { transform: translateX(18px); background: var(--accent); }
+  .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .muted { color: var(--muted); }
+  .code { font: 600 22px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .08em; color: var(--accent); }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #2b3040; color: var(--text); padding: 12px 18px; border-radius: 14px; max-width: 90vw; box-shadow: 0 8px 30px #0008; display: none; }
+  #toast.err { background: #4a2328; }
+  .pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #262935; color: var(--muted); margin-left: 6px; font-weight: 600; }
+  .ok { color: var(--good); } .warn { color: var(--warn); }
+  footer { margin-top: 30px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Thurea <small>Family</small></h1>
+    <span id="household"></span>
+  </header>
+  <div id="app" aria-live="polite"><div class="card muted">Loading…</div></div>
+  <footer id="foot"></footer>
+</main>
+<div id="toast" role="status"></div>
+<script>
+const T = "{{TOKEN}}";
+let state = null, busy = false;
+const $ = (h) => { const t = document.createElement("template"); t.innerHTML = h.trim(); return t.content.firstChild; };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function toast(msg, err) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = err ? "err" : ""; t.style.display = "block";
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 5000);
+}
+
+async function load() {
+  if (busy) return;
+  try {
+    const r = await fetch("/api/state?t=" + T);
+    state = await r.json();
+    render();
+  } catch { document.getElementById("household").textContent = "Control center closed — open it again from Thurea"; }
+}
+
+async function act(body) {
+  busy = true;
+  try {
+    const r = await fetch("/api/do?t=" + T, { method: "POST", headers: { "Content-Type": "application/json", "X-Thurea": "1" }, body: JSON.stringify(body) });
+    const v = await r.json();
+    toast(v.msg, !v.ok);
+  } catch (e) { toast("Couldn't reach Thurea: " + e, true); }
+  busy = false;
+  setTimeout(load, 400);
+}
+
+function sw(checked, on) {
+  const el = $(`<label class="switch"><input type="checkbox" ${checked ? "checked" : ""}><span></span></label>`);
+  el.querySelector("input").addEventListener("change", e => on(e.target.checked));
+  return el;
+}
+
+function row(icon, title, sub, right) {
+  const el = $(`<div class="row"><div class="icon" aria-hidden="true">${icon}</div><div class="main"><div class="title">${title}</div><div class="sub">${sub}</div></div><div class="actions"></div></div>`);
+  if (right) [].concat(right).forEach(r => el.querySelector(".actions").append(r));
+  return el;
+}
+
+function btn(label, cls, on) {
+  const b = $(`<button class="${cls || ""}">${esc(label)}</button>`);
+  b.addEventListener("click", on);
+  return b;
+}
+
+function askName(placeholder, label, go) {
+  const box = $(`<div class="inline"><input type="text" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}" maxlength="40"></div>`);
+  const input = box.querySelector("input");
+  box.append(btn(label, "primary", () => input.value.trim() && go(input.value.trim())));
+  input.addEventListener("keydown", e => { if (e.key === "Enter" && input.value.trim()) go(input.value.trim()); });
+  return box;
+}
+
+function section(title, node) {
+  const app = document.getElementById("app");
+  app.append($(`<h2>${esc(title)}</h2>`));
+  app.append(node);
+}
+
+function render() {
+  const s = state, app = document.getElementById("app");
+  app.innerHTML = "";
+  document.getElementById("household").textContent = s.household || "";
+  document.getElementById("foot").textContent = s.my_code ? `Your parent key on this computer: ${s.my_code}` : "";
+
+  if (!s.service) {
+    app.append($(`<div class="card"><div class="title" style="font-weight:600;font-size:17px">Thurea's household service isn't running here</div>
+      <p class="muted">This computer needs to be in the household first: <code>sudo thurea init</code> (a new household) or <code>sudo thurea join CODE</code>.</p></div>`));
+    return;
+  }
+  if (!s.has_family) {
+    const c = $(`<div class="card"><div style="font-weight:600;font-size:17px">Protect your children too</div>
+      <p class="muted">Start a family with you as a parent. Then mark your children's phones and computers, approve what they ask for, and choose what they may use. Only a parent can change a child's rules. Your computer asks for admin permission once.</p></div>`);
+    c.append(askName("Your name", "Start a family", name => act({ action: "create", name })));
+    app.append(c);
+    return;
+  }
+  if (!s.parent) {
+    const c = $(`<div class="card"><div style="font-weight:600;font-size:17px">Part of a family</div>
+      <p class="muted">Parents: ${esc(s.parents.join(", "))}. Only they can change the family's rules.</p></div>`);
+    if (s.my_code) c.append($(`<p>If you asked to be a parent: a parent approves the request showing <span class="code">${esc(s.my_code)}</span></p>`));
+    c.append(askName("Your name", "I'm a parent too", name => act({ action: "join", name })));
+    app.append(c);
+    return;
+  }
+
+  // Requests.
+  const req = $(`<div class="list"></div>`);
+  if (!s.inbox.length) req.append(row("✓", "Nothing waiting", "When a child asks for an app or a website, it shows here"));
+  for (const r of s.inbox) {
+    if (r.what === "parent") {
+      req.append(row("👪", `${esc(r.label)} wants to be a parent`, `Approve only if their device shows <span class="code" style="font-size:15px">${esc(r.code)}</span>`, [
+        btn("Approve", "primary", () => act({ action: "answer", id: r.id, approve: true })),
+        btn("Decline", "danger", () => act({ action: "answer", id: r.id, approve: false })),
+      ]));
+      continue;
+    }
+    const what = esc(r.label) + (r.what === "site" ? " (website)" : "");
+    const ago = Math.max(0, Math.round((Date.now() / 1000 - r.at) / 60));
+    req.append(row("🙋", `${esc(r.child)} asks for ${what}`, `${ago} min ago · ${esc(r.item)}`, [
+      btn("30 min", "", () => act({ action: "answer", id: r.id, approve: true, minutes: 30 })),
+      btn("2 hours", "", () => act({ action: "answer", id: r.id, approve: true, minutes: 120 })),
+      btn("Always", "primary", () => act({ action: "answer", id: r.id, approve: true })),
+      btn("Decline", "danger", () => act({ action: "answer", id: r.id, approve: false })),
+    ]));
+  }
+  section(`Requests${s.inbox.length ? " · " + s.inbox.length : ""}`, req);
+
+  // Children.
+  for (const [name, c] of Object.entries(s.children)) {
+    const l = $(`<div class="list"></div>`);
+    l.append(row("💬", "Social media", "TikTok, Instagram, Snapchat, Discord, X, Reddit… Off: only what you approve",
+      sw(c.social, on => act({ action: "category", child: name, category: "social", allow: on }))));
+    l.append(row("✉️", "Messaging", "WhatsApp, Signal, Telegram, Messages",
+      sw(c.messaging, on => act({ action: "category", child: name, category: "messaging", allow: on }))));
+    l.append(row("📦", "Hold new apps", "New apps stay frozen until you approve them",
+      sw(c.hold_new_apps, on => act({ action: "flag", child: name, flag: "hold_new_apps", on }))));
+    l.append(row("🔌", "Block USB debugging", "Off only while you set a phone up from a computer",
+      sw(c.block_debugging, on => act({ action: "flag", child: name, flag: "block_debugging", on }))));
+    for (const a of c.approved) l.append(row("✓", esc(a), "Approved for good", btn("Take back", "danger", () => act({ action: "revoke", child: name, item: a }))));
+    for (const g of c.grants) l.append(row("⏳", esc(g.item), `Approved for ${g.minutes_left} more min`, btn("End now", "danger", () => act({ action: "revoke", child: name, item: g.item }))));
+    section(name, l);
+  }
+
+  // Devices.
+  const devs = new Map();
+  for (const p of s.peers || []) devs.set(p.id, { name: p.name, platform: p.platform, online: true });
+  for (const [id, d] of Object.entries(s.devices || {})) if (!devs.has(id)) devs.set(id, { name: d.name, platform: "offline", online: false });
+  const dl = $(`<div class="list"></div>`);
+  if (!devs.size) dl.append(row("…", "No other devices seen yet", "Devices appear here when they're on the same network or the relay"));
+  for (const [id, d] of devs) {
+    const entry = (s.devices || {})[id];
+    const child = entry && entry.role === "child" ? entry.child : null;
+    const sub = `${child ? esc(child) + "'s device" : "Adult's device"} · ${esc(d.platform)}`;
+    const r = row(child ? "🧒" : "🧑", esc(d.name), sub);
+    const acts = r.querySelector(".actions");
+    if (child) acts.append(btn("Make it an adult's", "", () => act({ action: "role", device: id, role: "adult" })));
+    else {
+      const box = $(`<div class="inline" style="margin:0"><input type="text" placeholder="Child's name" aria-label="Child's name for ${esc(d.name)}" maxlength="40" style="width:140px"></div>`);
+      const input = box.querySelector("input");
+      box.append(btn("Child's device", "", () => input.value.trim() && act({ action: "role", device: id, role: "child", child: input.value.trim() })));
+      acts.append(box);
+    }
+    dl.append(r);
+  }
+  section("Devices", dl);
+
+  // Relay.
+  const rc = $(`<div class="card"><div style="font-weight:600">Reach your family from anywhere</div>
+    <p class="muted" style="margin:6px 0 0">Your own relay passes the family's encrypted messages between devices on different networks — a child's phone on mobile data, you at work. Run <code>thurea relay</code> on a server with a public UDP port (47830). It only ever sees scrambled data.</p></div>`);
+  const ri = $(`<div class="inline"><input type="text" placeholder="relay.example.org:47830" aria-label="Relay address" value="${esc(s.relay || "")}"></div>`);
+  ri.append(btn("Save", "primary", () => act({ action: "relay", addr: ri.querySelector("input").value.trim() })));
+  if (s.relay) ri.append(btn("Turn off", "danger", () => act({ action: "relay", addr: "" })));
+  rc.append(ri);
+  section("Away from home", rc);
+}
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

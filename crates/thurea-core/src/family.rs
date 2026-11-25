@@ -31,6 +31,9 @@ pub struct Family {
     /// Each child's rules, by the child's name.
     #[serde(default)]
     pub children: BTreeMap<String, ChildRules>,
+    /// Answered requests that weren't a child's (devices asking to become a parent's).
+    #[serde(default)]
+    pub decided: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -164,6 +167,20 @@ pub fn catalog_site(host: &str) -> Option<&'static CatalogEntry> {
 pub enum ItemKind {
     App,
     Site,
+    /// A device asking to become a parent's: `item` is its public key, `label` the parent's name.
+    Parent,
+}
+
+/// Six digits both devices show while one asks to become a parent's, so the approving parent
+/// can tell it's really that device's key (and not someone else's on the network).
+pub fn match_code(key_hex: &str) -> String {
+    let h = crate::crypto::sha256(key_hex.trim().as_bytes());
+    let n = u32::from_be_bytes([h[0], h[1], h[2], h[3]]) % 1_000_000;
+    format!("{:03} {:03}", n / 1000, n % 1000)
+}
+
+fn is_public_key(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// A child asking a parent for an app or a site. Sent through the (encrypted) mesh; the
@@ -313,9 +330,45 @@ impl Family {
         Some((name, rules))
     }
 
-    /// Has this request already been answered?
+    /// Has this request already been answered? (A parent request also counts as answered once
+    /// its key is a parent's.)
     pub fn decided(&self, r: &Request) -> bool {
+        if r.kind == ItemKind::Parent {
+            return self.decided.iter().any(|d| d == &r.id) || self.is_parent(&r.item);
+        }
         self.children.get(&r.child).is_some_and(|c| c.decided.iter().any(|d| d == &r.id))
+    }
+
+    /// Is this a request the family should show a parent at all?
+    pub fn acceptable(&self, r: &Request) -> bool {
+        match r.kind {
+            ItemKind::Parent => is_public_key(&r.item) && !self.parents.is_empty(),
+            _ => self.child_of(&r.device).is_some(),
+        }
+    }
+
+    /// A parent's answer (the caller signs the result). `minutes`: None = for good.
+    pub fn answer(&mut self, r: &Request, approve: bool, minutes: Option<u64>, now: u64) {
+        if r.kind == ItemKind::Parent {
+            if approve && is_public_key(&r.item) && !self.is_parent(&r.item) {
+                let name = if r.label.trim().is_empty() { "Parent".to_string() } else { r.label.trim().to_string() };
+                self.parents.push(Parent { name, key: r.item.to_ascii_lowercase() });
+            }
+            if !self.decided.iter().any(|d| d == &r.id) {
+                self.decided.push(r.id.clone());
+            }
+            let n = self.decided.len();
+            if n > DECIDED_KEEP {
+                self.decided.drain(..n - DECIDED_KEEP);
+            }
+            return;
+        }
+        let rules = self.children.entry(r.child.clone()).or_default();
+        if approve {
+            rules.approve(r, minutes, now);
+        } else {
+            rules.decline(r, now);
+        }
     }
 
     /// Makes a device a child's (creating the child's rules if needed) or an adult's.
@@ -467,6 +520,31 @@ mod tests {
         assert_eq!(catalog_site("www.Reddit.com.").unwrap().label, "Reddit");
         assert!(catalog_site("notreddit.com").is_none());
         assert!(catalog_app("com.example").is_none());
+    }
+
+    #[test]
+    fn a_second_parent_joins_with_a_match_code() {
+        let mut p = child_policy();
+        let (mum, _) = crate::crypto::new_parent_key();
+        p.add_parent("Mum", &mum, None).unwrap();
+        let (dad, dad_pub) = crate::crypto::new_parent_key();
+        let r = Request::new("laptop", "", ItemKind::Parent, &dad_pub, "Dad", 100);
+        assert!(p.family.acceptable(&r));
+        assert_eq!(match_code(&dad_pub).len(), 7);
+        let mut next = p.clone();
+        next.parent_edit(&mum, |x| x.family.answer(&r, true, None, 100)).unwrap();
+        assert!(p.accepts(&next).is_ok());
+        assert!(next.family.is_parent(&dad_pub) && next.family.decided(&r));
+        // Dad can now sign.
+        let mut by_dad = next.clone();
+        by_dad.parent_edit(&dad, |x| x.family.set_role("kid2", "Tablet", Role::Child, Some("Sam"))).unwrap();
+        assert!(next.accepts(&by_dad).is_ok());
+        // Junk keys are never shown or added.
+        let bad = Request::new("laptop", "", ItemKind::Parent, "nope", "X", 100);
+        assert!(!p.family.acceptable(&bad));
+        let mut f = p.family.clone();
+        f.answer(&bad, true, None, 100);
+        assert_eq!(f.parents.len(), 1);
     }
 
     #[test]

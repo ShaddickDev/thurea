@@ -107,6 +107,7 @@ Panel {
     function keepPhone(): void { phone.show("keep") }
     function closePhone(): void { phone.hide() }
     function settings(): void { root.open(); root.settingsOpen = true }
+    function family(): void { openProc.command = [root.thureaBin, "control-center"]; openProc.running = true }
     function status(): string { return root.isProtected ? strings.t("status.protected") : (root.status.line || "") }
   }
 
@@ -270,6 +271,14 @@ Panel {
               foreground: root.foreground
               fontFamily: root.fontFamily
               onClicked: { root.close(); phone.show() }
+            }
+            Button {
+              text: strings.t("action.family")
+              iconText: "\u{f0c0}"
+              bordered: true
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              onClicked: { root.close(); openProc.command = [root.thureaBin, "control-center"]; openProc.running = true }
             }
             Button {
               text: strings.t("action.reapply")

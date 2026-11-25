@@ -25,7 +25,7 @@ package() {
   install -Dm644 thurea-tray.desktop "$pkgdir/etc/xdg/autostart/thurea-tray.desktop"
   install -dm755 "$pkgdir/usr/bin"
   ln -s /usr/lib/thurea/thurea-update "$pkgdir/usr/bin/thurea-update"
-  for u in thurea.service thurea.timer thurea.path thurea-extensions.service thurea-update.service thurea-update.timer; do
+  for u in thurea.service thurea.timer thurea.path thurea-extensions.service thurea-update.service thurea-update.timer thurea-mesh.service; do
     install -Dm644 "$u" "$pkgdir/usr/lib/systemd/system/$u"
   done
   for h in hooks/*.hook; do install -Dm644 "$h" "$pkgdir/usr/share/libalpm/hooks/$(basename "$h")"; done

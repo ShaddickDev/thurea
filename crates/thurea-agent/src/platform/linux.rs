@@ -283,3 +283,19 @@ pub fn notify(text: &str, urgent: bool) {
             .status();
     }
 }
+
+/// The submit folder: anyone may drop files (sticky, world-writable), nobody can list them.
+pub fn open_submit_dir(dir: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o1733)).map_err(|e| e.to_string())
+}
+
+/// After joining a household: (re)start the package's mesh service, if Thurea is installed.
+pub fn start_mesh_service() -> String {
+    if Path::new("/usr/lib/systemd/system/thurea-mesh.service").exists() && run("systemctl", &["restart", "thurea-mesh.service"]).is_ok() {
+        "Thurea's household service is running.".into()
+    } else {
+        "Next: sudo thurea install (runs Thurea at startup)".into()
+    }
+}

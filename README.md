@@ -26,13 +26,31 @@ then marks each child's device from the household's device list.
   and optionally no USB debugging.
 * **Ask a parent:** the child taps a frozen app (or types a website) in Thurea; the parent's phone
   shows it and the parent allows it for 30 minutes, 2 hours, always, or declines. Approvals that
-  run out re-freeze the app by themselves. On a computer: `thurea family` lists waiting requests,
-  `thurea family approve ID [MINUTES]` answers.
+  run out re-freeze the app by themselves.
 * **Adults' devices** keep exactly the protection they had; family rules never loosen them.
 
-Still to come: the control center on every desktop, a self-hosted relay so parents can answer
-from anywhere (today it works on the home network or over Tailscale), screen-time limits and
-bedtime, and children's accounts on Windows and Linux.
+* **Control center (every desktop):** Family in the Omarchy bar, the Linux tray or the Windows
+  tray opens `thurea control-center`: requests to answer, each child's rules, the household's
+  devices, and the relay. It runs as you — no admin — and signs changes with *your* parent key
+  (`~/.config/thurea/parent.key`, `%APPDATA%\Thurea\parent.key`); Thurea's service only takes a
+  change a parent signed, so a child on the same computer can't make one. Starting a family on a
+  computer asks for admin once.
+* **More than one parent:** on another phone or computer, "I'm a parent too" (`thurea family join
+  NAME`) asks the family; an existing parent approves it after checking the 6-digit code both
+  devices show.
+
+### Your own relay (reach the family from anywhere)
+
+At home, devices find each other on the network. Away from home — a child's phone on mobile data,
+you at work — they talk through a relay you run yourself. It only forwards the family's encrypted
+messages (it can't read or change them) and stores nothing.
+
+1. On any computer with a public address (a small VPS, or a home server with UDP port 47830
+   forwarded): `thurea relay` (or as a service: `ExecStart=/usr/bin/thurea relay` in a systemd unit).
+2. A parent enters its address (`relay.example.org:47830`) under Family → Away from home, or runs
+   `thurea family relay relay.example.org:47830`. Every device learns it with the family policy.
+
+Still to come: screen-time limits and bedtime, and children's accounts on Windows and Linux.
 
 ## Desktop apps (Omarchy plugin, Linux tray, Windows tray)
 

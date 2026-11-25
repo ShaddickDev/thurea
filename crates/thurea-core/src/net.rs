@@ -1,9 +1,11 @@
-//! The mesh over UDP. Heartbeats go to the LAN broadcast address and to any peers listed
-//! by address (for devices on other networks, e.g. over Tailscale or WireGuard).
+//! The mesh over UDP. Heartbeats go to the LAN broadcast address, to any peers listed by
+//! address (for devices on other networks, e.g. over Tailscale or WireGuard), and through the
+//! household's self-hosted relay if the family policy names one ([`crate::relay`]).
 //! Uses only `std::net`, so the same loop runs on Android, Linux and Windows.
 
 use crate::mesh::{self, Body, Event, Heartbeat, Mesh};
 use crate::policy::Policy;
+use crate::relay;
 use crate::status::{Report, State};
 use std::collections::HashMap;
 use std::io;
@@ -26,6 +28,8 @@ pub struct NodeConfig {
     pub bind: std::net::IpAddr,
     /// Seconds without a message before a peer counts as gone.
     pub silent_after: u64,
+    /// Relay to use instead of the policy's ("host:port").
+    pub relay: Option<String>,
 }
 
 impl NodeConfig {
@@ -41,6 +45,7 @@ impl NodeConfig {
             broadcast: true,
             bind: std::net::IpAddr::from([0, 0, 0, 0]),
             silent_after: mesh::SILENT_AFTER,
+            relay: None,
         }
     }
 }
@@ -60,6 +65,10 @@ pub trait Host {
     /// a parent answers).
     fn outgoing(&mut self) -> Vec<Body> {
         Vec::new()
+    }
+    /// About once a second. Returns true to announce right away (the policy just changed here).
+    fn tick(&mut self) -> bool {
+        false
     }
 }
 
@@ -110,16 +119,25 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
     // Where each peer was last heard from, for direct replies.
     let mut seen_at: HashMap<String, SocketAddr> = HashMap::new();
 
-    let send = |mesh: &mut Mesh, body: Body, to: &[SocketAddr]| {
+    // The relay (if any): packets to it are wrapped with the household's room.
+    let room = relay::room(&cfg.key);
+    let relay_name = |p: &Policy| cfg.relay.clone().or_else(|| p.relay.clone()).filter(|r| !r.trim().is_empty());
+    let mut relay_for = relay_name(&host.policy());
+    let mut relay_addr = relay_for.as_ref().and_then(|r| resolve(&[r.clone()], relay::PORT).into_iter().next());
+
+    let send = |mesh: &mut Mesh, body: Body, to: &[SocketAddr], via: Option<SocketAddr>| {
         let pkt = mesh::seal(&cfg.key, &mesh.message(body, now_ms()));
         for a in to {
-            let _ = sock.send_to(&pkt, a);
+            let _ = if Some(*a) == via { sock.send_to(&relay::wrap(&room, &pkt), a) } else { sock.send_to(&pkt, a) };
         }
     };
 
     while !stop.load(Ordering::Relaxed) {
-        if addrs_at.elapsed() > Duration::from_secs(300) {
+        let wanted = relay_name(&host.policy());
+        if addrs_at.elapsed() > Duration::from_secs(300) || wanted != relay_for {
             addrs = resolve(&cfg.peers, cfg.port); // names may move (DHCP, VPN)
+            relay_addr = wanted.as_ref().and_then(|r| resolve(&[r.clone()], relay::PORT).into_iter().next());
+            relay_for = wanted;
             addrs_at = Instant::now();
         }
         if last_hb.map_or(true, |t| t.elapsed() >= cfg.heartbeat_every) {
@@ -136,16 +154,27 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
             if cfg.broadcast {
                 to.push(SocketAddr::from(([255, 255, 255, 255], cfg.port)));
             }
-            send(&mut mesh, heartbeat(cfg, &report, &policy), &to);
+            if let Some(r) = relay_addr {
+                if !to.contains(&r) {
+                    to.push(r);
+                }
+            }
+            send(&mut mesh, heartbeat(cfg, &report, &policy), &to, relay_addr);
             for b in host.outgoing() {
-                send(&mut mesh, b, &to);
+                send(&mut mesh, b, &to, relay_addr);
             }
             last_hb = Some(Instant::now());
         }
 
         match sock.recv_from(&mut buf) {
             Ok((n, from)) => {
-                let Ok(msg) = mesh::open(&cfg.key, &buf[..n]) else { continue };
+                // Through the relay: only our household's room.
+                let packet = match relay::unwrap(&buf[..n]) {
+                    Some((r, inner)) if r == room => inner,
+                    Some(_) => continue,
+                    None => &buf[..n],
+                };
+                let Ok(msg) = mesh::open(&cfg.key, packet) else { continue };
                 let sender = msg.from.clone();
                 let policy = host.policy();
                 let Ok(events) = mesh.receive(msg, crate::now(), &policy) else { continue };
@@ -162,6 +191,11 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
                     if cfg.broadcast {
                         to.push(SocketAddr::from(([255, 255, 255, 255], cfg.port)));
                     }
+                    if let Some(r) = relay_addr {
+                        if !to.contains(&r) {
+                            to.push(r);
+                        }
+                    }
                     to
                 };
                 for e in &events {
@@ -169,13 +203,13 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
                         Event::SendPolicy { to } => {
                             let to = routes(to);
                             for part in mesh::policy_parts(&policy) {
-                                send(&mut mesh, part, &to);
+                                send(&mut mesh, part, &to, relay_addr);
                                 // Paced: a burst of datagrams overflows small NAT/Wi-Fi buffers.
                                 std::thread::sleep(Duration::from_millis(3));
                             }
                         }
                         Event::RequestPolicy { from } => {
-                            send(&mut mesh, Body::PolicyRequest { have_version: policy.version }, &routes(from));
+                            send(&mut mesh, Body::PolicyRequest { have_version: policy.version }, &routes(from), relay_addr);
                         }
                         Event::AdoptPolicy { policy, .. } => {
                             host.adopt_policy(policy.clone());
@@ -193,6 +227,30 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
 
         if last_tick.elapsed() >= Duration::from_secs(1) {
             last_tick = Instant::now();
+            if host.tick() {
+                // A parent changed the rules here: push them to every device now, instead of
+                // waiting for each to notice the new version in a heartbeat.
+                last_hb = None;
+                let policy = host.policy();
+                let mut to = addrs.clone();
+                for a in seen_at.values() {
+                    if !to.contains(a) {
+                        to.push(*a);
+                    }
+                }
+                if cfg.broadcast {
+                    to.push(SocketAddr::from(([255, 255, 255, 255], cfg.port)));
+                }
+                if let Some(r) = relay_addr {
+                    if !to.contains(&r) {
+                        to.push(r);
+                    }
+                }
+                for part in mesh::policy_parts(&policy) {
+                    send(&mut mesh, part, &to, relay_addr);
+                    std::thread::sleep(Duration::from_millis(3));
+                }
+            }
             let events = mesh.tick(crate::now());
             for e in &events {
                 host.on_event(e);
