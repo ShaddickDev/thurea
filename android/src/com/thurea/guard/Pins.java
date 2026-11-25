@@ -609,6 +609,8 @@ final class Pins {
         DevicePolicyManager dpm = c.getSystemService(DevicePolicyManager.class);
         ComponentName a = Policy.admin(c);
         List<String> g = guarded(c);
+        // Apps a parent hasn't approved on a child's phone stay frozen (FamilyMode), pinned or not.
+        java.util.Set<String> childFrozen = FamilyMode.prefs(c).getStringSet("frozen", new java.util.HashSet<>());
         // No "Force stop" / "Clear storage" for these in Settings (Android 11+).
         if (Build.VERSION.SDK_INT >= 30) { try { dpm.setUserControlDisabledPackages(a, g); } catch (Exception ignored) {} }
         // Switched off (e.g. by Play Protect) or frozen by something else: bring it back.
@@ -616,7 +618,7 @@ final class Pins {
         for (String p : g) {
             android.content.pm.ApplicationInfo ai;
             try { ai = c.getPackageManager().getApplicationInfo(p, 0); } catch (Exception e) { continue; }
-            boolean off = !ai.enabled, frozen = suspended(c, p);
+            boolean off = !ai.enabled, frozen = suspended(c, p) && !childFrozen.contains(p);
             if (!off && !frozen) continue;
             if (frozen) { try { dpm.setPackagesSuspended(a, new String[]{ p }, false); } catch (Exception ignored) {} }
             String app = null;

@@ -107,6 +107,13 @@ impl Host for Desktop {
     }
 
     fn on_event(&mut self, e: &Event) {
+        if let Event::Request { request } = e {
+            // A child asks: only a parent's computer keeps it (and says so).
+            if crate::family::received(request, &self.policy) {
+                platform::notify(&format!("{} — answer with: thurea family", e.alert_text().unwrap_or_default()), false);
+            }
+            return;
+        }
         if let Some(t) = e.alert_text() {
             if e.is_warning() || matches!(e, Event::PeerJoined { .. } | Event::AdoptPolicy { .. }) {
                 platform::notify(&t, e.is_warning());

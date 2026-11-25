@@ -56,6 +56,11 @@ pub trait Host {
     fn on_event(&mut self, event: &Event);
     /// The household view changed (for status screens).
     fn on_peers(&mut self, _mesh: &Mesh) {}
+    /// Extra messages to send with each heartbeat (a child's open requests, resent until
+    /// a parent answers).
+    fn outgoing(&mut self) -> Vec<Body> {
+        Vec::new()
+    }
 }
 
 fn now_ms() -> u128 {
@@ -132,6 +137,9 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
                 to.push(SocketAddr::from(([255, 255, 255, 255], cfg.port)));
             }
             send(&mut mesh, heartbeat(cfg, &report, &policy), &to);
+            for b in host.outgoing() {
+                send(&mut mesh, b, &to);
+            }
             last_hb = Some(Instant::now());
         }
 
@@ -162,6 +170,8 @@ pub fn run(cfg: &NodeConfig, host: &mut dyn Host, stop: &AtomicBool) -> io::Resu
                             let to = routes(to);
                             for part in mesh::policy_parts(&policy) {
                                 send(&mut mesh, part, &to);
+                                // Paced: a burst of datagrams overflows small NAT/Wi-Fi buffers.
+                                std::thread::sleep(Duration::from_millis(3));
                             }
                         }
                         Event::RequestPolicy { from } => {
@@ -234,7 +244,7 @@ mod tests {
     #[test]
     fn two_nodes_talk_over_udp() {
         let key = crate::crypto::new_key().to_vec();
-        let (pa, pb) = (47900, 47901);
+        let (pa, pb) = (47911, 47912);
         let mut newer = Policy::default();
         newer.block("example.org").unwrap();
 

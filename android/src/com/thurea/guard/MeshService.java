@@ -72,6 +72,13 @@ public class MeshService extends Service {
                 }
                 String text = e.optString("text");
                 if (text.isEmpty()) continue;
+                if (e.optBoolean("request")) {       // a child asks: tap opens the Family page
+                    PendingIntent fam = PendingIntent.getActivity(this, 51, new Intent(this, PageActivity.class).putExtra("page", PageActivity.FAMILY)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                    nm.notify(nextId++ % 1000 + 100, new Notification.Builder(this, "mesh-alert").setSmallIcon(R.drawable.thurea_small)
+                        .setContentTitle("Thurea family").setContentText(text).setContentIntent(fam).setAutoCancel(true).build());
+                    continue;
+                }
                 nm.notify(nextId++ % 1000 + 100, new Notification.Builder(this, e.optBoolean("warning") ? "mesh-alert" : "mesh")
                     .setSmallIcon(R.drawable.thurea_small).setContentTitle("Thurea household").setContentText(text)
                     .setStyle(new Notification.BigTextStyle().bigText(text)).setAutoCancel(true).build());

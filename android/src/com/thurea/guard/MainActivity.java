@@ -81,7 +81,11 @@ public class MainActivity extends Activity {
 
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); handle(i); render(); apply(); }
 
-    @Override protected void onResume() { super.onResume(); render(); }
+    /** The screen on show, so a status saved in the background (a parent's change arriving) redraws it. */
+    private static java.lang.ref.WeakReference<MainActivity> shown = new java.lang.ref.WeakReference<>(null);
+
+    @Override protected void onResume() { super.onResume(); shown = new java.lang.ref.WeakReference<>(this); render(); }
+    @Override protected void onPause() { super.onPause(); if (shown.get() == this) shown.clear(); }
 
     /** A message passed on by Remote (e.g. the pin install that just started). */
     private void handle(Intent i) {
@@ -124,9 +128,21 @@ public class MainActivity extends Activity {
             col.addView(f);
         }
         col.addView(statusCard());
+        org.json.JSONObject fam = Native.family(this);
+        boolean child = "child".equals(fam.optString("role"));
+        if (child) col.addView(askCard(fam));
 
         col.addView(Ui.section(this, "Shortcuts"));
         LinearLayout l = Ui.list(this);
+        if (!child) {
+            int waiting = fam.optJSONArray("inbox") == null ? 0 : fam.optJSONArray("inbox").length();
+            l.addView(Ui.row(this, "👪", "Family",
+                waiting > 0 ? waiting + " request" + (waiting == 1 ? "" : "s") + " waiting for you"
+                    : fam.optBoolean("parent") ? "Children's devices, requests, rules"
+                    : fam.optBoolean("has_family") ? "Part of a family" : "Protect your children's devices too",
+                () -> PageActivity.open(this, PageActivity.FAMILY)));
+            l.addView(Ui.divider(this));
+        }
         List<String> emails = PageActivity.savedEmails(this);
         l.addView(Ui.row(this, "G", "Google sign-in",
             emails.isEmpty() ? "Save your email for one-tap sign-in" : emails.get(0) + (emails.size() > 1 ? " +" + (emails.size() - 1) : ""),
@@ -137,6 +153,20 @@ public class MainActivity extends Activity {
         l.addView(Ui.row(this, "🔑", "YubiKey guide", "Needs the key connected",
             () -> startActivity(new Intent(this, YubiKeyGuide.class))));
         col.addView(l);
+    }
+
+    /** Child's phone: what's frozen and the way to ask a parent. */
+    private View askCard(org.json.JSONObject fam) {
+        int frozen = FamilyMode.frozenApps(this).size();
+        int asked = fam.optJSONArray("asks") == null ? 0 : fam.optJSONArray("asks").length();
+        LinearLayout c = Ui.card(this);
+        c.setBackground(Ui.ripple(0xFF1E2A3A, Ui.dp(this, 20)));
+        c.addView(Ui.title(this, "Ask a parent", 17));
+        String sub = frozen == 0 ? "Ask for a website or an app" : frozen + " app" + (frozen == 1 ? " needs" : "s need") + " a parent's OK";
+        if (asked > 0) sub += " · " + asked + " asked, waiting";
+        c.addView(Ui.text(this, sub, 14, Ui.MUTED), Ui.gapTop(this, 4));
+        c.setOnClickListener(v -> PageActivity.open(this, PageActivity.KIDS));
+        return c;
     }
 
     private View verseCard() {
@@ -226,6 +256,8 @@ public class MainActivity extends Activity {
         } catch (Throwable ignored) {}
         if (!hh.isEmpty()) r = r.endsWith("\n") ? r + hh : r + "\n" + hh;
         c.getSharedPreferences("status", MODE_PRIVATE).edit().putString("result", r).putLong("when", System.currentTimeMillis()).apply();
+        MainActivity m = shown.get();
+        if (m != null) m.runOnUiThread(m::render);
     }
 
     static Status status(Context c) {

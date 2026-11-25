@@ -22,7 +22,8 @@ import java.util.regex.Pattern;
 
 /** Thurea's inner screens: Settings, Protection status, Google sign-in, Pinned apps. */
 public class PageActivity extends Activity {
-    static final String SETTINGS = "settings", STATUS = "status", LOGIN = "login", PINS = "pins", SETUP = "setup";
+    static final String SETTINGS = "settings", STATUS = "status", LOGIN = "login", PINS = "pins", SETUP = "setup",
+        FAMILY = "family", KIDS = "kids";
     private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[a-z]{2,}$", Pattern.CASE_INSENSITIVE);
     private LinearLayout col;
     private String page;
@@ -34,7 +35,8 @@ public class PageActivity extends Activity {
         page = getIntent().getStringExtra("page");
         if (page == null) page = SETTINGS;
         String title = SETTINGS.equals(page) ? "Settings" : STATUS.equals(page) ? "Protection status"
-            : LOGIN.equals(page) ? "Google sign-in" : SETUP.equals(page) ? "Finish setup" : "Pinned apps";
+            : LOGIN.equals(page) ? "Google sign-in" : SETUP.equals(page) ? "Finish setup"
+            : FAMILY.equals(page) ? "Family" : KIDS.equals(page) ? "Ask a parent" : "Pinned apps";
         col = Ui.page(this, Ui.topBar(this, title, true, null, null));
     }
 
@@ -47,8 +49,214 @@ public class PageActivity extends Activity {
             case LOGIN: login(); break;
             case PINS: pins(); break;
             case SETUP: setup(); break;
+            case FAMILY: family(); break;
+            case KIDS: kids(); break;
             default: settings();
         }
+    }
+
+    // ── Family (parents) ──
+
+    private String famNote;
+
+    /** Runs a family change off the main thread, then shows its message and redraws. */
+    private void famDo(java.util.function.Supplier<String> change) {
+        new Thread(() -> {
+            String m = change.get();
+            famNote = m;
+            if (m.startsWith("✓")) MainActivity.saveStatus(this, Policy.apply(getApplicationContext()));
+            runOnUiThread(this::render);
+        }).start();
+    }
+
+    private void ask(String title, String hint, String preset, java.util.function.Consumer<String> done) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setText(preset);
+        e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        new AlertDialog.Builder(this).setTitle(title).setView(e)
+            .setPositiveButton("OK", (d, w) -> done.accept(e.getText().toString().trim()))
+            .setNegativeButton("Cancel", null).show();
+    }
+
+    private void family() {
+        org.json.JSONObject f = Native.family(this);
+        if (famNote != null) {
+            LinearLayout n = Ui.card(this);
+            n.addView(Ui.text(this, famNote, 14, famNote.startsWith("!") ? Ui.WARN : Ui.TEXT));
+            col.addView(n);
+        }
+        if (!f.optBoolean("joined")) {
+            LinearLayout c = Ui.card(this);
+            c.addView(Ui.title(this, "Join your household first", 17));
+            c.addView(Ui.text(this, "Pair this phone with a computer that runs Thurea (thurea pair-android). Family settings travel between your devices, encrypted, through that household.", 14, Ui.MUTED), Ui.gapTop(this, 6));
+            col.addView(c);
+            return;
+        }
+        if (!f.optBoolean("has_family")) {
+            LinearLayout c = Ui.card(this);
+            c.addView(Ui.title(this, "Protect your children too", 17));
+            c.addView(Ui.text(this, "Make this phone a parent's. You can then mark your children's phones, approve what they ask for, and choose what they may use. Only a parent's phone can change a child's rules.", 14, Ui.MUTED), Ui.gapTop(this, 6));
+            c.addView(Ui.button(this, "Start a family", true, Ui.ACCENT, () ->
+                ask("Your name", "e.g. Mum", "", name -> famDo(() -> Native.familyCreate(name)))), Ui.gapTop(this, 14));
+            col.addView(c);
+            return;
+        }
+        if (!f.optBoolean("parent")) {
+            LinearLayout c = Ui.card(this);
+            c.addView(Ui.title(this, "Part of a family", 17));
+            c.addView(Ui.text(this, "Parents: " + join(f.optJSONArray("parents")) + ". Only their phones can change the family's rules.", 14, Ui.MUTED), Ui.gapTop(this, 6));
+            col.addView(c);
+            return;
+        }
+
+        // Requests from children.
+        org.json.JSONArray inbox = f.optJSONArray("inbox");
+        col.addView(Ui.section(this, "Requests"));
+        LinearLayout rl = Ui.list(this);
+        if (inbox == null || inbox.length() == 0) rl.addView(Ui.row(this, "✓", "Nothing waiting", "When a child asks for an app or a website, it shows here", null));
+        for (int i = 0; inbox != null && i < inbox.length(); i++) {
+            org.json.JSONObject r = inbox.optJSONObject(i);
+            if (i > 0) rl.addView(Ui.divider(this));
+            String id = r.optString("id");
+            String what = r.optString("label") + ("site".equals(r.optString("kind")) ? " (website)" : "");
+            rl.addView(Ui.row(this, "🙋", r.optString("child") + " asks for " + what,
+                DateUtils.getRelativeTimeSpanString(r.optLong("at") * 1000) + " · tap to answer", () ->
+                new AlertDialog.Builder(this).setTitle(r.optString("child") + ": " + what)
+                    .setItems(new String[]{ "Allow for 30 minutes", "Allow for 2 hours", "Allow always", "Decline" }, (d, w) -> {
+                        int[] minutes = { 30, 120, 0 };
+                        famDo(() -> w == 3 ? Native.familyAnswer(id, false, 0) : Native.familyAnswer(id, true, minutes[w]));
+                    }).show()));
+        }
+        col.addView(rl);
+
+        // Children and their rules.
+        org.json.JSONObject kids = f.optJSONObject("children");
+        if (kids != null && kids.length() > 0) {
+            for (java.util.Iterator<String> it = kids.keys(); it.hasNext(); ) {
+                String name = it.next();
+                org.json.JSONObject k = kids.optJSONObject(name);
+                org.json.JSONObject cats = k.optJSONObject("categories");
+                col.addView(Ui.section(this, name));
+                LinearLayout kl = Ui.list(this);
+                kl.addView(Ui.toggle(this, "💬", "Social media", "TikTok, Instagram, Snapchat, Discord… Off: only what you approve",
+                    cats != null && cats.optBoolean("social"), on -> famDo(() -> Native.familyCategory(name, "social", on))));
+                kl.addView(Ui.divider(this));
+                kl.addView(Ui.toggle(this, "✉", "Messaging", "WhatsApp, Signal, Telegram, Messages",
+                    cats == null || cats.optBoolean("messaging", true), on -> famDo(() -> Native.familyCategory(name, "messaging", on))));
+                kl.addView(Ui.divider(this));
+                kl.addView(Ui.toggle(this, "📦", "Hold new apps", "New apps stay frozen until you approve them",
+                    k.optBoolean("hold_new_apps", true), on -> famDo(() -> Native.familyFlag(name, "hold_new_apps", on))));
+                kl.addView(Ui.divider(this));
+                kl.addView(Ui.toggle(this, "🔌", "Block USB debugging", "Off only while you set the phone up from a computer",
+                    k.optBoolean("block_debugging", true), on -> famDo(() -> Native.familyFlag(name, "block_debugging", on))));
+                List<String> approved = new ArrayList<>();
+                for (String key : new String[]{ "allowed_apps", "allowed_sites" }) {
+                    org.json.JSONArray a = k.optJSONArray(key);
+                    for (int i = 0; a != null && i < a.length(); i++) approved.add(a.optString(i));
+                }
+                org.json.JSONArray g = k.optJSONArray("grants");
+                for (int i = 0; g != null && i < g.length(); i++) approved.add(g.optJSONObject(i).optString("item") + " (until "
+                    + DateFormat.getTimeFormat(this).format(new java.util.Date(g.optJSONObject(i).optLong("until") * 1000)) + ")");
+                for (String item : approved) {
+                    kl.addView(Ui.divider(this));
+                    String bare = item.replaceAll(" \\(until .*\\)$", "");
+                    kl.addView(Ui.row(this, "✓", item, "Approved · tap to take back", () ->
+                        new AlertDialog.Builder(this).setTitle("Take back " + bare + "?")
+                            .setPositiveButton("Take back", (d, w) -> famDo(() -> Native.familyRevoke(name, bare)))
+                            .setNegativeButton("Keep", null).show()));
+                }
+                col.addView(kl);
+            }
+        }
+
+        // Devices in the household: whose are they?
+        col.addView(Ui.section(this, "Devices"));
+        LinearLayout dl = Ui.list(this);
+        org.json.JSONObject devices = f.optJSONObject("devices");
+        List<String[]> all = new ArrayList<>();       // id, name, platform
+        try {
+            org.json.JSONArray peers = new org.json.JSONObject(Native.household()).optJSONArray("peers");
+            for (int i = 0; peers != null && i < peers.length(); i++) {
+                org.json.JSONObject p = peers.optJSONObject(i);
+                all.add(new String[]{ p.optString("id"), p.optString("name"), p.optString("platform") });
+            }
+        } catch (Exception ignored) {}
+        for (java.util.Iterator<String> it = devices == null ? java.util.Collections.<String>emptyIterator() : devices.keys(); it.hasNext(); ) {
+            String id = it.next();
+            boolean listed = false;
+            for (String[] d : all) listed |= d[0].equals(id);
+            if (!listed) all.add(new String[]{ id, devices.optJSONObject(id).optString("name"), "offline" });
+        }
+        if (all.isEmpty()) dl.addView(Ui.row(this, "…", "No other devices seen yet", "Devices appear here when they're on the same network", null));
+        boolean first = true;
+        for (String[] d : all) {
+            if (!first) dl.addView(Ui.divider(this));
+            first = false;
+            org.json.JSONObject entry = devices == null ? null : devices.optJSONObject(d[0]);
+            boolean isChild = entry != null && "child".equals(entry.optString("role"));
+            String sub = (isChild ? entry.optString("child") + "'s device" : "Adult's device") + " · " + d[2] + " · tap to change";
+            dl.addView(Ui.row(this, isChild ? "🧒" : "🧑", d[1], sub, () ->
+                new AlertDialog.Builder(this).setTitle(d[1])
+                    .setItems(new String[]{ "A child's device…", "An adult's device" }, (dd, w) -> {
+                        if (w == 1) famDo(() -> Native.familySetRole(d[0], d[1], "adult", ""));
+                        else ask("Whose device?", "Child's name", isChild ? entry.optString("child") : "",
+                            child -> { if (!child.isEmpty()) famDo(() -> Native.familySetRole(d[0], d[1], "child", child)); });
+                    }).show()));
+        }
+        col.addView(dl);
+        TextView hint = Ui.text(this, "A child's device gets YouTube Restricted Mode, family DNS, social media blocked until you approve, new apps held until you approve, and no factory reset.", 13, Ui.MUTED);
+        hint.setPadding(Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6), 0);
+        col.addView(hint);
+    }
+
+    private static String join(org.json.JSONArray a) {
+        List<String> l = new ArrayList<>();
+        for (int i = 0; a != null && i < a.length(); i++) l.add(a.optString(i));
+        return String.join(", ", l);
+    }
+
+    // ── Ask a parent (child's phone) ──
+
+    private void kids() {
+        org.json.JSONObject f = Native.family(this);
+        if (famNote != null) {
+            LinearLayout n = Ui.card(this);
+            n.addView(Ui.text(this, famNote, 14, famNote.startsWith("!") ? Ui.WARN : Ui.TEXT));
+            col.addView(n);
+        }
+        List<String> asked = new ArrayList<>();
+        org.json.JSONArray asks = f.optJSONArray("asks");
+        for (int i = 0; asks != null && i < asks.length(); i++) asked.add(asks.optJSONObject(i).optString("item"));
+
+        col.addView(Ui.section(this, "Apps that need a parent's OK"));
+        LinearLayout l = Ui.list(this);
+        List<String[]> frozen = FamilyMode.frozenApps(this);
+        if (frozen.isEmpty()) l.addView(Ui.row(this, "✓", "Nothing frozen", "All your apps are open to you", null));
+        boolean first = true;
+        for (String[] a : frozen) {
+            if (!first) l.addView(Ui.divider(this));
+            first = false;
+            boolean waiting = asked.contains(a[0]);
+            l.addView(Ui.row(this, waiting ? "⏳" : "🙋", a[1], a[2] + (waiting ? " · asked, waiting for a parent" : " · tap to ask"),
+                waiting ? null : () -> famDo(() -> { String m = Native.ask("app", a[0], a[1]); Native.meshStart(); return m; })));
+        }
+        col.addView(l);
+
+        col.addView(Ui.section(this, "A website"));
+        LinearLayout w = Ui.list(this);
+        w.addView(Ui.row(this, "🌐", "Ask for a website", "e.g. a site for school that's blocked", () ->
+            ask("Which website?", "example.com", "", site -> { if (!site.isEmpty()) famDo(() -> { String m = Native.ask("site", site, site); Native.meshStart(); return m; }); })));
+        for (int i = 0; asks != null && i < asks.length(); i++) {
+            org.json.JSONObject r = asks.optJSONObject(i);
+            if (!"site".equals(r.optString("kind"))) continue;
+            w.addView(Ui.divider(this));
+            w.addView(Ui.row(this, "⏳", r.optString("label"), "Asked, waiting for a parent", null));
+        }
+        col.addView(w);
+        TextView hint = Ui.text(this, "Your parent sees your request on their phone and can say yes for a while or for good.", 13, Ui.MUTED);
+        hint.setPadding(Ui.dp(this, 6), Ui.dp(this, 10), Ui.dp(this, 6), 0);
+        col.addView(hint);
     }
 
     // ── Settings ──
@@ -87,8 +295,8 @@ public class PageActivity extends Activity {
 
     /** Third-party credits (the full list is CREDITS.md in Thurea's source). */
     static final String CREDITS = "Credits: Morphe patches (GPL-3.0) and MicroG-RE (Apache-2.0) by MorpheApp, ReVanced patches (GPL-3.0), "
-        + "all downloaded from their authors' GitHub releases. Family DNS by Cloudflare for Families. Adult-site list by StevenBlack/hosts (MIT) "
-        + "and The Block List Project (Unlicense). Rust crates serde, sha2, hmac, getrandom and jni (MIT / Apache-2.0).";
+        + "all downloaded from their authors' GitHub releases. Family DNS by Cloudflare for Families (children's phones: CleanBrowsing Family filter). Adult-site list by StevenBlack/hosts (MIT) "
+        + "and The Block List Project (Unlicense). Rust crates serde, sha2, hmac, getrandom, jni, ed25519-dalek and chacha20poly1305 (MIT / Apache-2.0).";
 
     private TextView fine(String s) { return Ui.text(this, s, 12, 0xFF7A808A); }
 

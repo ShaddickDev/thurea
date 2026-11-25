@@ -2,6 +2,7 @@
 //! step across the household by the mesh (the highest `version` wins).
 
 use crate::crypto;
+use crate::family::Family;
 use crate::matcher::{normalize_host, DomainSet};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -17,6 +18,20 @@ pub struct Policy {
     pub blocklist: Vec<String>,
     pub browser: BrowserRules,
     pub android: AndroidRules,
+    /// Parents, children's devices and children's rules. Empty: no family yet.
+    #[serde(default)]
+    pub family: Family,
+    /// A parent's signature over everything above. Required once the family has a parent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<Signature>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Signature {
+    /// The signing parent's public key (hex).
+    pub by: String,
+    /// Ed25519 signature (hex) over the policy without this field.
+    pub sig: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -84,6 +99,8 @@ impl Default for Policy {
                     "app.morphe.manager", "app.revanced.manager.flutter",
                 ]),
             },
+            family: Family::default(),
+            signature: None,
         }
     }
 }
@@ -122,6 +139,81 @@ impl Policy {
         if let Some(bad) = self.blocklist.iter().find(|r| normalize_host(r).is_none()) {
             return Err(format!("policy: blocklist entry {bad:?} is not a domain"));
         }
+        Ok(())
+    }
+
+    /// The bytes a parent signs: the whole policy without its signature.
+    pub fn signed_bytes(&self) -> Vec<u8> {
+        let mut p = self.clone();
+        p.signature = None;
+        serde_json::to_vec(&p).expect("policy serializes")
+    }
+
+    /// Signs as a parent (secret key hex). The signer must be one of the family's parents.
+    pub fn sign(&mut self, parent_secret: &str) -> Result<(), String> {
+        let by = crypto::parent_public(parent_secret).ok_or("that isn't a parent key")?;
+        if !self.family.is_parent(&by) {
+            return Err("this parent key isn't one of the family's parents".into());
+        }
+        self.signature = None;
+        let sig = crypto::parent_sign(parent_secret, &self.signed_bytes()).ok_or("signing failed")?;
+        self.signature = Some(Signature { by, sig });
+        Ok(())
+    }
+
+    /// Signed by one of `parents` (and intact)?
+    fn signed_by_one_of(&self, family: &Family) -> bool {
+        self.signature.as_ref().is_some_and(|s| family.is_parent(&s.by) && crypto::parent_verify(&s.by, &self.signed_bytes(), &s.sig))
+    }
+
+    /// May this device, now enforcing `self`, switch to `offered`? (Newness is checked
+    /// separately.) Without a family anything valid is accepted, as before. Once there is
+    /// a parent, only a policy signed by one of *this* policy's parents is — so a child's
+    /// device (or anyone with the household key) can't change the rules, add a parent or
+    /// dissolve the family.
+    pub fn accepts(&self, offered: &Policy) -> Result<(), String> {
+        offered.validate()?;
+        if self.family.parents.is_empty() {
+            // First family: it must at least be signed by one of its own parents.
+            if !offered.family.parents.is_empty() && !offered.signed_by_one_of(&offered.family) {
+                return Err("family policy without a valid parent signature".into());
+            }
+            return Ok(());
+        }
+        if offered.signed_by_one_of(&self.family) {
+            Ok(())
+        } else {
+            Err("not signed by a parent of this family".into())
+        }
+    }
+
+    /// A parent's change: applies `edit`, raises the version and signs.
+    pub fn parent_edit(&mut self, parent_secret: &str, edit: impl FnOnce(&mut Policy)) -> Result<(), String> {
+        let mut next = self.clone();
+        edit(&mut next);
+        next.version = self.version + 1;
+        next.sign(parent_secret)?;
+        next.validate()?;
+        *self = next;
+        Ok(())
+    }
+
+    /// Starts a family with this parent (or adds a parent to an existing one, signed by
+    /// `signer`, an existing parent).
+    pub fn add_parent(&mut self, name: &str, parent_secret: &str, signer: Option<&str>) -> Result<(), String> {
+        let key = crypto::parent_public(parent_secret).ok_or("that isn't a parent key")?;
+        let signer = match signer {
+            Some(s) => s.to_string(),
+            None if self.family.parents.is_empty() => parent_secret.to_string(),
+            None => return Err("the family already has parents: an existing parent must add you".into()),
+        };
+        let mut next = self.clone();
+        if !next.family.is_parent(&key) {
+            next.family.parents.push(crate::family::Parent { name: name.into(), key });
+        }
+        next.version = self.version + 1;
+        next.sign(&signer)?;
+        *self = next;
         Ok(())
     }
 
@@ -248,6 +340,57 @@ mod tests {
         assert_eq!(p.version, 3);
         assert!(!p.unblock("example.org"));
         assert!(p.block("not a domain").is_err());
+    }
+
+    #[test]
+    fn only_parents_change_a_family() {
+        let base = Policy::default();
+        let (mum, mum_pub) = crypto::new_parent_key();
+        let (stranger, _) = crypto::new_parent_key();
+
+        // A new family is accepted by a device without one, if signed by its own parent.
+        let mut fam = base.clone();
+        fam.add_parent("Mum", &mum, None).unwrap();
+        assert_eq!(fam.family.parents[0].key, mum_pub);
+        assert!(base.accepts(&fam).is_ok());
+        let mut forged = fam.clone();
+        forged.signature = None;
+        assert!(base.accepts(&forged).is_err());
+
+        // Mum's edits are accepted.
+        let mut next = fam.clone();
+        next.parent_edit(&mum, |p| p.family.set_role("kid", "Kid", crate::family::Role::Child, None)).unwrap();
+        assert!(fam.accepts(&next).is_ok());
+
+        // Anyone else's are not: unsigned, signed by a stranger, a stranger adding themselves.
+        let mut unsigned = next.clone();
+        unsigned.family.devices.clear();
+        unsigned.version += 1;
+        unsigned.signature = None;
+        assert!(next.accepts(&unsigned).is_err());
+        let mut tampered = next.clone();
+        tampered.family.devices.clear();
+        tampered.version += 1; // signature no longer matches
+        assert!(next.accepts(&tampered).is_err());
+        let mut takeover = next.clone();
+        takeover.family.parents.push(crate::family::Parent { name: "X".into(), key: crypto::parent_public(&stranger).unwrap() });
+        takeover.version += 1;
+        takeover.sign(&stranger).unwrap();
+        assert!(next.accepts(&takeover).is_err());
+        assert!(takeover.add_parent("Y", &stranger, None).is_err());
+
+        // Mum can add Dad; Dad's edits are then accepted.
+        let (dad, _) = crypto::new_parent_key();
+        let mut two = next.clone();
+        two.add_parent("Dad", &dad, Some(&mum)).unwrap();
+        assert!(next.accepts(&two).is_ok());
+        let mut by_dad = two.clone();
+        by_dad.parent_edit(&dad, |p| { p.block("example.org").unwrap(); }).unwrap();
+        assert!(two.accepts(&by_dad).is_ok());
+
+        // Signatures survive the JSON round trip.
+        let back = Policy::from_json(&by_dad.to_json()).unwrap();
+        assert!(two.accepts(&back).is_ok());
     }
 
     #[test]

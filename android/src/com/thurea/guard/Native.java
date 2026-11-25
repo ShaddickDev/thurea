@@ -24,6 +24,20 @@ final class Native {
     /** Status lines in, overall state out ("ok", "unknown", "degraded"). */
     static native String setStatus(String lines);
     static native boolean meshJoin(String keyHex, String name);
+    /** Family / child screens: role, parents, devices, children's rules, inbox, own requests. */
+    static native String familyJson();
+    /** What this phone must enforce (apps to suspend, Chrome extras, DNS, restrictions). */
+    static native String androidPlan(String appsJson, String knownJson);
+    /** A child asks a parent: kind "app" or "site". Returns a message for the screen. */
+    static native String ask(String kind, String item, String label);
+    static native String familyCreate(String parentName);
+    static native String familySetRole(String device, String name, String role, String child);
+    /** minutes 0 = for good. */
+    static native String familyAnswer(String requestId, boolean approve, int minutes);
+    static native String familyCategory(String child, String category, boolean allowed);
+    static native String familyRevoke(String child, String item);
+    /** flag: "hold_new_apps" or "block_debugging". */
+    static native String familyFlag(String child, String flag, boolean on);
     static native boolean meshStart();
     /** Peers reached by address (other networks, Tailscale), comma separated. */
     static native boolean meshAddPeers(String list);
@@ -67,6 +81,11 @@ final class Native {
         String[] out = new String[a.length()];
         for (int i = 0; i < out.length; i++) out[i] = a.optString(i);
         return out;
+    }
+
+    static JSONObject family(Context c) {
+        policy(c);
+        try { return new JSONObject(familyJson()); } catch (Exception e) { return new JSONObject(); }
     }
 
     static int policyVersion(Context c) { return policy(c).optInt("version"); }

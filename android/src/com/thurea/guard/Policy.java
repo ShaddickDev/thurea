@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import org.json.JSONObject;
 import java.util.Set;
 
 /**
@@ -43,9 +44,15 @@ final class Policy {
         ComponentName a = admin(c);
         StringBuilder r = new StringBuilder();
 
-        // 1. Private DNS locked to Cloudflare for Families (whole phone while the VPN is off).
-        // Android looks the host up over the network here, which it forbids on the main thread.
-        final String familyDns = Native.familyHost(c);
+        // 0. Adult's or child's phone? (from the parent-signed family policy)
+        JSONObject plan = FamilyMode.plan(c);
+        boolean child = FamilyMode.isChild(plan);
+
+        // 1. Private DNS locked to a family DNS (whole phone while the VPN is off): Cloudflare for
+        // Families, or for a child CleanBrowsing's Family filter (it also forces YouTube
+        // Restricted Mode in every app). Android looks the host up over the network here, which
+        // it forbids on the main thread.
+        final String familyDns = child ? plan.optString("dns_host", Native.familyHost(c)) : Native.familyHost(c);
         final String[] dns = { "! Family DNS: timed out\n" };
         Thread t = new Thread(() -> {
             try {
@@ -60,6 +67,10 @@ final class Policy {
         try { dpm.addUserRestriction(a, UserManager.DISALLOW_CONFIG_PRIVATE_DNS); } catch (Exception ignored) {}
         r.append(dns[0]);
 
+        // 1b. Child mode: apps frozen until a parent approves, child-only restrictions. Before the
+        // installer guard, which may freeze some of the same apps for its own reasons.
+        r.append(FamilyMode.enforce(c, dpm, a, plan));
+
         // 2. No other people/profiles, no sideloaded apps.
         try { dpm.addUserRestriction(a, UserManager.DISALLOW_ADD_USER); } catch (Exception ignored) {}
         r.append(installers(c, dpm, a));
@@ -70,12 +81,14 @@ final class Policy {
         chrome.putString("DnsOverHttpsTemplates", "https://" + familyDns + "/dns-query");
         chrome.putInt("SafeSitesFilterBehavior", 1);          // Google's safe-sites filter
         chrome.putBoolean("ForceGoogleSafeSearch", true);
-        chrome.putInt("ForceYouTubeRestrict", 1);
+        chrome.putInt("ForceYouTubeRestrict", child ? plan.optInt("youtube_restrict", 2) : 1);
         chrome.putInt("IncognitoModeAvailability", 1);
-        chrome.putStringArray("URLBlocklist", Native.blocklist(c));
+        List<String> urls = new ArrayList<>(java.util.Arrays.asList(Native.blocklist(c)));
+        urls.addAll(FamilyMode.blockedSites(plan));
+        chrome.putStringArray("URLBlocklist", urls.toArray(new String[0]));
         dpm.setApplicationRestrictions(a, CHROME, chrome);
         try { dpm.setUninstallBlocked(a, CHROME, true); } catch (Exception ignored) {}
-        r.append("✓ Chrome locked: family DNS, safe-sites filter, SafeSearch, YouTube Restricted, no incognito, ")
+        r.append("✓ Chrome locked: family DNS, safe-sites filter, SafeSearch, YouTube Restricted").append(child ? " (strict)" : "").append(", no incognito, ")
          .append(chrome.getStringArray("URLBlocklist").length).append(" harmful sites blocked\n");
 
         // 4. VPNs must use family DNS (watched whenever a VPN connects); Thurea may show notices.

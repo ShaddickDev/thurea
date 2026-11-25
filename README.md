@@ -10,6 +10,30 @@ device in the household, and is hard to switch off. One project, one version, on
 | **Android** | Device owner: family DNS, private DNS/VPN checks, locked apps, YouTube ad blocker, household mesh; set up with one QR scan (`thurea setup-phone`) | `thurea-android.apk` |
 | **Browser extension** | Ads, trackers, pop-unders, cookie banners, YouTube extras; adult sites blocked when the `pornBlock` policy is set (the desktop platforms set it) | inside every desktop package |
 
+## Family: parents and children
+
+Thurea protects the parents themselves, and children's devices more strictly. A parent starts a
+family on their phone (Thurea → Family → Start a family) or computer (`thurea family create NAME`),
+then marks each child's device from the household's device list.
+
+* **Only parents decide.** A parent's device holds an Ed25519 key; once there is a family, every
+  device takes new rules only if a parent signed them. A child's device can ask, never decide.
+  Household traffic is encrypted (XChaCha20-Poly1305), so what children ask for stays in the family.
+* **A child's phone gets:** YouTube Restricted Mode (strict, in Chrome; CleanBrowsing's family DNS
+  enforces it in every app, the YouTube app included), social media (TikTok, Instagram, Snapchat,
+  Discord, X, Reddit…) frozen until a parent approves, new apps held until a parent approves,
+  messaging allowed (a parent can switch it off), no factory reset, safe mode or clock changes,
+  and optionally no USB debugging.
+* **Ask a parent:** the child taps a frozen app (or types a website) in Thurea; the parent's phone
+  shows it and the parent allows it for 30 minutes, 2 hours, always, or declines. Approvals that
+  run out re-freeze the app by themselves. On a computer: `thurea family` lists waiting requests,
+  `thurea family approve ID [MINUTES]` answers.
+* **Adults' devices** keep exactly the protection they had; family rules never loosen them.
+
+Still to come: the control center on every desktop, a self-hosted relay so parents can answer
+from anywhere (today it works on the home network or over Tailscale), screen-time limits and
+bedtime, and children's accounts on Windows and Linux.
+
 ## Desktop apps (Omarchy plugin, Linux tray, Windows tray)
 
 Every desktop has the same Thurea app:

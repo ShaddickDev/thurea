@@ -5,11 +5,16 @@
 //!   (switched off, uninstalled, network cut, Thurea killed);
 //! * keep one policy: a block added on any device reaches all of them (highest version wins).
 //!
-//! Every message is authenticated with HMAC-SHA256 under the household key, carries a
-//! strictly increasing sequence number and a timestamp, so it cannot be forged, replayed
-//! or delayed past [`Mesh::max_skew`] by anyone without the key.
+//! Every message is encrypted and authenticated (XChaCha20-Poly1305 under a key derived from
+//! the household key), carries a strictly increasing sequence number and a timestamp, so
+//! nobody without the key can read it (children's requests stay in the family), forge it,
+//! replay it or delay it past [`Mesh::max_skew`].
+//!
+//! The household key only lets a device *talk*. Once there is a family, a policy is only
+//! adopted if a parent signed it ([`Policy::accepts`]): children's devices can ask, not decide.
 
 use crate::crypto;
+use crate::family::Request;
 use crate::policy::Policy;
 use crate::status::{Check, State};
 use serde::{Deserialize, Serialize};
@@ -43,11 +48,16 @@ pub enum Body {
     PolicyOffer { policy: Policy },
     /// One piece of a policy. Policies are sent in pieces of [`PART_BYTES`] so every
     /// datagram fits a normal MTU: fragmented UDP is dropped by many NATs, VPNs and Wi-Fi.
-    PolicyPart { digest: String, index: u32, total: u32, hex: String },
+    PolicyPart { digest: String, index: u32, total: u32, b64: String },
+    /// A child asking for an app or a site; parents' devices show it.
+    Request(Request),
 }
 
-/// Bytes of policy JSON per piece (hex-encoded on the wire: ~1.2 KB per datagram).
-pub const PART_BYTES: usize = 500;
+/// Bytes of policy JSON per piece (base64 inside the message, which is encrypted and base64
+/// again on the wire: ~1.2 KB per datagram).
+pub const PART_BYTES: usize = 550;
+/// How long pieces of an unfinished policy are kept: resends fill in what was lost.
+const PARTS_KEEP: u64 = 600;
 const MAX_PARTS: u32 = 1024;
 
 /// Splits a policy into signed-message bodies, in order.
@@ -59,7 +69,7 @@ pub fn policy_parts(policy: &Policy) -> Vec<Body> {
     chunks
         .iter()
         .enumerate()
-        .map(|(i, c)| Body::PolicyPart { digest: digest.clone(), index: i as u32, total, hex: crypto::hex(c) })
+        .map(|(i, c)| Body::PolicyPart { digest: digest.clone(), index: i as u32, total, b64: crypto::base64url(c) })
         .collect()
 }
 
@@ -73,8 +83,10 @@ pub struct Message {
 
 #[derive(Serialize, Deserialize)]
 struct Wire {
-    m: String,
-    mac: String,
+    /// Format version (2: encrypted).
+    v: u8,
+    /// Nonce + ciphertext, base64url.
+    c: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -86,21 +98,21 @@ pub enum MeshError {
     FromSelf,
 }
 
-/// Signs a message for the wire.
+/// Encrypts a message for the wire.
 pub fn seal(key: &[u8], msg: &Message) -> Vec<u8> {
-    let m = serde_json::to_string(msg).expect("message serializes");
-    let mac = crypto::hex(&crypto::mac(key, m.as_bytes()));
-    serde_json::to_vec(&Wire { m, mac }).expect("wire serializes")
+    let m = serde_json::to_vec(msg).expect("message serializes");
+    serde_json::to_vec(&Wire { v: 2, c: crypto::base64url(&crypto::encrypt(key, &m)) }).expect("wire serializes")
 }
 
-/// Checks the signature and decodes; replay and freshness are checked by [`Mesh::receive`].
+/// Decrypts and decodes; replay and freshness are checked by [`Mesh::receive`].
 pub fn open(key: &[u8], bytes: &[u8]) -> Result<Message, MeshError> {
     let w: Wire = serde_json::from_slice(bytes).map_err(|_| MeshError::Malformed)?;
-    let tag = crypto::unhex(&w.mac).ok_or(MeshError::Malformed)?;
-    if !crypto::verify(key, w.m.as_bytes(), &tag) {
-        return Err(MeshError::BadMac);
+    if w.v != 2 {
+        return Err(MeshError::Malformed);
     }
-    serde_json::from_str(&w.m).map_err(|_| MeshError::Malformed)
+    let sealed = crypto::unbase64url(&w.c).ok_or(MeshError::Malformed)?;
+    let m = crypto::decrypt(key, &sealed).ok_or(MeshError::BadMac)?;
+    serde_json::from_slice(&m).map_err(|_| MeshError::Malformed)
 }
 
 /// Does `a` supersede `b`? Higher version, or the same version with a larger digest.
@@ -123,6 +135,8 @@ pub enum Event {
     RequestPolicy { from: String },
     /// A newer, valid policy arrived: save and enforce it.
     AdoptPolicy { policy: Policy, from: String },
+    /// A child asks for something (parents' devices show it; answered ones are dropped).
+    Request { request: Request },
 }
 
 impl Event {
@@ -142,6 +156,7 @@ impl Event {
             Event::PeerSilent { name, seconds, .. } => format!("{name} has not checked in for {} min — Thurea may be off there", seconds / 60),
             Event::PeerBack { name, .. } => format!("{name} is back online"),
             Event::AdoptPolicy { policy, .. } => format!("Family policy updated to version {}", policy.version),
+            Event::Request { request } => format!("{} asks for {}", request.child, request.label),
             Event::SendPolicy { .. } | Event::RequestPolicy { .. } => return None,
         })
     }
@@ -161,6 +176,8 @@ pub struct Peer {
     pub silent: bool,
     #[serde(skip)]
     last_policy_msg: u64,
+    #[serde(skip)]
+    requests_seen: Vec<String>,
 }
 
 impl Peer {
@@ -219,6 +236,7 @@ impl Mesh {
             heartbeat: None,
             silent: false,
             last_policy_msg: 0,
+            requests_seen: Vec::new(),
         });
         if msg.seq <= peer.last_seq {
             return Err(MeshError::Replay);
@@ -273,16 +291,16 @@ impl Mesh {
                 }
             }
             Body::PolicyOffer { policy: offered } => {
-                if newer(&offered, policy) && offered.validate().is_ok() {
+                if newer(&offered, policy) && policy.accepts(&offered).is_ok() {
                     ev.push(Event::AdoptPolicy { policy: offered, from: peer.id.clone() });
                 }
             }
-            Body::PolicyPart { digest, index, total, hex } => {
+            Body::PolicyPart { digest, index, total, b64 } => {
                 let from = peer.id.clone();
                 if total == 0 || total > MAX_PARTS || index >= total {
                     return Err(MeshError::Malformed);
                 }
-                let bytes = crypto::unhex(&hex).ok_or(MeshError::Malformed)?;
+                let bytes = crypto::unbase64url(&b64).ok_or(MeshError::Malformed)?;
                 let key = (from.clone(), digest.clone());
                 let entry = self.parts.entry(key.clone()).or_insert_with(|| (vec![None; total as usize], now));
                 if entry.0.len() != total as usize {
@@ -294,11 +312,22 @@ impl Mesh {
                     let json: Vec<u8> = pieces.into_iter().flatten().flatten().collect();
                     // The assembled policy must be exactly the one announced.
                     match serde_json::from_slice::<Policy>(&json) {
-                        Ok(p) if p.digest() == digest && newer(&p, policy) && p.validate().is_ok() => {
+                        Ok(p) if p.digest() == digest && newer(&p, policy) && policy.accepts(&p).is_ok() => {
                             ev.push(Event::AdoptPolicy { policy: p, from });
                         }
                         _ => {}
                     }
+                }
+            }
+            Body::Request(r) => {
+                // Only from the device it names, only once per request, and not if answered.
+                let seen = peer.requests_seen.contains(&r.id);
+                if r.device == peer.id && !seen && !policy.family.decided(&r) && policy.family.child_of(&r.device).is_some() {
+                    peer.requests_seen.push(r.id.clone());
+                    if peer.requests_seen.len() > 100 {
+                        peer.requests_seen.remove(0);
+                    }
+                    ev.push(Event::Request { request: r });
                 }
             }
         }
@@ -308,8 +337,8 @@ impl Mesh {
     /// Call about once a second: notices devices that stopped checking in.
     pub fn tick(&mut self, now: u64) -> Vec<Event> {
         let mut ev = Vec::new();
-        // Pieces of a transfer that never completed are dropped after a minute (it is resent).
-        self.parts.retain(|_, (_, first)| now.saturating_sub(*first) < 60);
+        // Pieces of a transfer that never completed are kept a while: each resend fills gaps.
+        self.parts.retain(|_, (_, first)| now.saturating_sub(*first) < PARTS_KEEP);
         for p in self.peers.values_mut() {
             let quiet = now.saturating_sub(p.last_seen);
             if !p.silent && quiet >= self.silent_after {
@@ -354,7 +383,12 @@ mod tests {
         let bytes = seal(&k, &m);
         assert_eq!(open(&k, &bytes).unwrap(), m);
         assert_eq!(open(&crypto::new_key(), &bytes), Err(MeshError::BadMac));
-        let forged = String::from_utf8(bytes).unwrap().replace("Laptop", "Lapt0p");
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(!text.contains("Laptop"), "nothing readable on the wire");
+        // Flip one hex digit of the ciphertext.
+        let i = text.len() - 5;
+        let flipped = if &text[i..i + 1] == "A" { "B" } else { "A" };
+        let forged = format!("{}{}{}", &text[..i], flipped, &text[i + 1..]);
         assert_eq!(open(&k, forged.as_bytes()), Err(MeshError::BadMac));
         assert_eq!(open(&k, b"junk"), Err(MeshError::Malformed));
     }
@@ -485,7 +519,7 @@ mod tests {
         for (i, b) in parts.into_iter().enumerate() {
             assert!(m.receive(msg("new", i as u64 + 1, 100, b), 100, &old).unwrap().is_empty());
         }
-        m.tick(200); // stale buffer dropped
+        m.tick(100 + PARTS_KEEP); // stale buffer dropped
         assert!(m.parts.is_empty());
         // pieces claiming another policy's digest never assemble into an adoption
         let mut forged = policy_parts(&newer_p);
@@ -499,7 +533,7 @@ mod tests {
             assert!(m.receive(msg("new", i as u64 + 1, 100, b), 100, &old).unwrap().is_empty());
         }
         assert_eq!(
-            m.receive(msg("new", 999, 100, Body::PolicyPart { digest: "x".into(), index: 5, total: 2, hex: String::new() }), 100, &old),
+            m.receive(msg("new", 999, 100, Body::PolicyPart { digest: "x".into(), index: 5, total: 2, b64: String::new() }), 100, &old),
             Err(MeshError::Malformed)
         );
     }
@@ -512,5 +546,87 @@ mod tests {
         assert!(s2 > s1);
         let mut restarted = Mesh::new("a");
         assert!(restarted.message(hb("A", State::Ok, 1), 1_005_000).seq > s2);
+    }
+
+    #[test]
+    fn family_devices_only_take_parent_signed_policies() {
+        let (mum, _) = crypto::new_parent_key();
+        let mut fam = Policy::default();
+        fam.add_parent("Mum", &mum, None).unwrap();
+        fam.parent_edit(&mum, |p| p.family.set_role("kid", "Kid's phone", crate::family::Role::Child, Some("Kid"))).unwrap();
+        // The child's phone offers a policy without its own restrictions.
+        let mut loose = fam.clone();
+        loose.family.devices.clear();
+        loose.version += 5;
+        loose.signature = None;
+        let mut m = Mesh::new("mumphone");
+        let e = m.receive(msg("kid", 1, 100, Body::PolicyOffer { policy: loose.clone() }), 100, &fam).unwrap();
+        assert!(e.is_empty(), "unsigned policy must be ignored");
+        for (i, b) in policy_parts(&loose).into_iter().enumerate() {
+            let e = m.receive(msg("kid", i as u64 + 2, 100, b), 100, &fam).unwrap();
+            assert!(e.is_empty());
+        }
+        // Mum's signed change is taken.
+        let mut next = fam.clone();
+        next.parent_edit(&mum, |p| { p.block("example.org").unwrap(); }).unwrap();
+        let e = Mesh::new("kid").receive(msg("mumphone", 1, 100, Body::PolicyOffer { policy: next }), 100, &fam).unwrap();
+        assert!(matches!(&e[..], [Event::AdoptPolicy { .. }]));
+    }
+
+    #[test]
+    fn requests_only_from_childrens_devices_once() {
+        let (mum, _) = crypto::new_parent_key();
+        let mut fam = Policy::default();
+        fam.add_parent("Mum", &mum, None).unwrap();
+        fam.parent_edit(&mum, |p| p.family.set_role("kid", "Kid's phone", crate::family::Role::Child, Some("Kid"))).unwrap();
+        let r = Request::new("kid", "Kid", crate::family::ItemKind::App, "com.snapchat.android", "Snapchat", 100);
+        // Survives the wire.
+        let k = crypto::new_key();
+        let back = open(&k, &seal(&k, &msg("kid", 1, 100, Body::Request(r.clone())))).unwrap();
+        assert_eq!(back.body, Body::Request(r.clone()));
+        let mut m = Mesh::new("mumphone");
+        let e = m.receive(msg("kid", 1, 100, Body::Request(r.clone())), 100, &fam).unwrap();
+        assert!(matches!(&e[..], [Event::Request { .. }]));
+        assert_eq!(e[0].alert_text().unwrap(), "Kid asks for Snapchat");
+        // Resent: not shown twice.
+        assert!(m.receive(msg("kid", 2, 100, Body::Request(r.clone())), 100, &fam).unwrap().is_empty());
+        // From another device, or naming one that isn't a child's: ignored.
+        let mut fake = r.clone();
+        fake.id = "other".into();
+        assert!(m.receive(msg("laptop", 1, 100, Body::Request(fake.clone())), 100, &fam).unwrap().is_empty());
+        fake.device = "laptop".into();
+        assert!(m.receive(msg("laptop", 2, 100, Body::Request(fake)), 100, &fam).unwrap().is_empty());
+        // Answered: ignored.
+        let mut answered = fam.clone();
+        answered.parent_edit(&mum, |p| p.family.children.get_mut("Kid").unwrap().decline(&r, 100)).unwrap();
+        let mut m2 = Mesh::new("dadphone");
+        assert!(m2.receive(msg("kid", 1, 100, Body::Request(r)), 100, &answered).unwrap().is_empty());
+    }
+
+    #[test]
+    fn lost_pieces_are_filled_in_by_resends() {
+        let mut newer_p = Policy::default();
+        newer_p.block("example.org").unwrap();
+        let old = Policy::default();
+        let parts = policy_parts(&newer_p);
+        let mut m = Mesh::new("old");
+        let mut seq = 0;
+        // First send: every other piece lost.
+        for (i, b) in parts.iter().enumerate() {
+            seq += 1;
+            if i % 2 == 0 {
+                assert!(m.receive(msg("new", seq, 100, b.clone()), 100, &old).unwrap().is_empty());
+            }
+        }
+        m.tick(200);
+        // Resend two minutes later: the rest arrives, the policy completes.
+        let mut adopted = false;
+        for (i, b) in parts.iter().enumerate() {
+            seq += 1;
+            if i % 2 == 1 {
+                adopted |= m.receive(msg("new", seq, 220, b.clone()), 220, &old).unwrap().iter().any(|e| matches!(e, Event::AdoptPolicy { .. }));
+            }
+        }
+        assert!(adopted);
     }
 }

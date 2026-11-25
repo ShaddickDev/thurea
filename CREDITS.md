@@ -20,13 +20,14 @@ own releases and never bundled into Thurea.
 | AutoClaim Point Twitch | `extension/userscripts/autoclaim-point-twitch.user.js` | MjKey, <https://greasyfork.org/users/519758> | MIT |
 | Copy URL / Download Video ideas | `extension/omarchy.js` | Omarchy (37signals), <https://github.com/basecamp/omarchy> | MIT |
 | QR code encoder | `crates/thurea-core/src/qr.rs`, `windows/thurea/tray/ThureaTray.cs`, Omarchy plugin | Thurea's own code, following the method of Project Nayuki's *QR Code generator* (<https://www.nayuki.io/page/qr-code-generator-library>, MIT) | MIT |
-| Rust crates: serde, serde_json, sha2, hmac, getrandom, jni, ksni | `crates/` | their authors on crates.io | MIT or Apache-2.0 (ksni: Unlicense) |
+| Rust crates: serde, serde_json, sha2, hmac, getrandom, jni, ksni, ed25519-dalek, chacha20poly1305 (RustCrypto / dalek-cryptography) | `crates/` | their authors on crates.io | MIT or Apache-2.0 (ksni: Unlicense) |
 
 ## Services Thurea talks to (not shipped)
 
 | What | Used for | License / terms |
 |---|---|---|
 | Cloudflare for Families (1.1.1.3) | family DNS on every device | Cloudflare's service terms |
+| CleanBrowsing Family filter (185.228.168.168) | family DNS on children's phones (also enforces YouTube Restricted Mode) | CleanBrowsing's service terms |
 | SponsorBlock API, <https://sponsor.ajay.app> | skipping sponsor segments on YouTube (only a 4-character hash prefix of the video ID is sent) | database CC BY-NC-SA 4.0, by Ajay Ramachandran and contributors. Thurea is non-commercial |
 | GitHub Releases | Thurea's own signed updates, filter list updates | — |
 

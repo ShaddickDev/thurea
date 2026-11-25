@@ -3,6 +3,7 @@
 mod adopt;
 mod config;
 mod daemon;
+mod family;
 mod platform;
 mod prefs;
 mod setup_phone;
@@ -11,6 +12,10 @@ use config::Config;
 use thurea_core::bend::{self, Engine};
 use thurea_core::{crypto, Policy, State};
 use std::io::Read;
+
+fn help() -> String {
+    HELP.replace("{FAMILY}", family::HELP)
+}
 
 const HELP: &str = "\
 Thurea — family protection for Linux, Windows and Android, working together.
@@ -45,6 +50,9 @@ Every day:
   thurea audit FILE|- [--engine rust|bend|bend-gpu]
                                    Check a list of visited sites (one per line) against the
                                    blocklist (Rust by default; Bend runs it on HVM in parallel)
+
+Family (a parent's controls; as root / Administrator):
+{FAMILY}
 
 Tray apps (no admin needed):
   thurea verse [--json]            Today's verse (World English Bible, public domain)
@@ -196,6 +204,10 @@ fn dispatch(args: &[String]) -> Result<String, String> {
             need_admin()?;
             daemon::run().map(|_| String::new())
         }
+        "family" => {
+            need_admin_for_config()?;
+            family::run(args)
+        }
         "status" => status(),
         "watch" => daemon::watch().map(|_| String::new()),
         "block" | "unblock" => {
@@ -206,7 +218,7 @@ fn dispatch(args: &[String]) -> Result<String, String> {
             if !changed {
                 return Ok(if cmd == "block" { format!("{site} is already blocked") } else { format!("{site} isn't on the list (only exact entries can be removed)") });
             }
-            p.save(&config::policy_path()).map_err(|e| e.to_string())?;
+            let p = family::save_signed(&config::load_policy(), p)?;
             Ok(format!(
                 "{} {site}. Policy is now version {}; every device in the household picks it up within a minute.",
                 if cmd == "block" { "Blocked" } else { "Unblocked" },
@@ -276,9 +288,9 @@ fn dispatch(args: &[String]) -> Result<String, String> {
             _ => Ok(prefs::load().iter().map(|(k, v)| format!("{k:<10} {}", if v.as_bool() == Some(true) { "on" } else { "off" })).collect::<Vec<_>>().join("\n")),
         },
         "desktop-status" => Ok(platform::desktop_status().to_string()),
-        "help" | "--help" | "-h" => Ok(HELP.into()),
+        "help" | "--help" | "-h" => Ok(help()),
         "version" | "--version" => Ok(format!("thurea {}", env!("CARGO_PKG_VERSION"))),
-        other => Err(format!("unknown command {other:?}\n\n{HELP}")),
+        other => Err(format!("unknown command {other:?}\n\n{}", help())),
     }
 }
 
