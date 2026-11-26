@@ -28,7 +28,9 @@ if [ "$MODE" = test ]; then
   umask 022  # the keys above stay private; the packages need normal permissions
   "$R/release/build.sh" "$VER"
   D=$R/dist
-  python3 -I "$R/release/check-public.py" --assets "$D"/thurea-*.{crx,xpi,zst,deb,rpm,zip,apk}
+  for f in "$D"/thurea-*.{crx,xpi,zst,deb,rpm,zip,apk}; do
+    python3 -I "$R/release/check-public.py" --assets "$f" || { echo "private-feature check failed on ${f##*/}"; rpm -qp --qf '%{RPMFORMAT}\n' "$D/thurea-linux.rpm" 2>/dev/null; bsdtar -tf "$f" 2>&1 | head -5; exit 1; }
+  done
   echo "== Test build OK: $(ls "$D" | tr '\n' ' ')"
   exit 0
 fi
