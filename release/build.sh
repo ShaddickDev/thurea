@@ -221,7 +221,9 @@ mkdir -p "$B/rpmbuild"
     case $f in /etc/*) echo "%config(noreplace) $f" ;; *) echo "$f" ;; esac
   done
   echo "%dir /usr/lib/thurea"; echo "%dir /usr/share/thurea" ) > "$B/rpmbuild/files.list"
-rpmbuild -bb --quiet --define "_topdir $B/rpmbuild" --define "stage $RR" --define "ver $VER" "$R/linux/rpm/thurea.spec" >/dev/null
+# _rpmformat 4: rpm 6 builds v6 packages by default, which libarchive (the private-feature check)
+# can't read and older rpm releases may not install. Older rpm ignores the macro.
+rpmbuild -bb --quiet --define "_rpmformat 4" --define "_topdir $B/rpmbuild" --define "stage $RR" --define "ver $VER" "$R/linux/rpm/thurea.spec" >/dev/null
 cp "$B"/rpmbuild/RPMS/x86_64/thurea-"$VER"-1.x86_64.rpm "$D/thurea-linux.rpm"
 
 # ---- Windows ----
