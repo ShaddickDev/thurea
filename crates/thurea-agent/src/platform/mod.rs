@@ -5,6 +5,9 @@
 //! * `install()` / `uninstall()` — run Thurea at startup / remove everything Thurea set;
 //! * `notify(text)`   — show an alert to whoever is using the computer.
 
+// The hosts and policy-file helpers are Linux's; on Windows Thurea.ps1 manages those files.
+#![cfg_attr(windows, allow(dead_code))]
+
 use thurea_core::Policy;
 use std::path::Path;
 use std::process::Command;

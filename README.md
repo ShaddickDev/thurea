@@ -52,6 +52,9 @@ install it.
 **Windows 10 / 11.** Download `thurea-windows.zip`, extract it, right-click
 `Thurea\Install Thurea.cmd` → *Run as administrator*. (Or build the Thurea Windows 11 ISO from
 `windows/` for a fresh install.)
+Thurea for Windows uses no kernel driver, so it can't blue-screen the PC, and games with
+anti-cheat (Valorant's Vanguard, Easy Anti-Cheat, BattlEye) keep working: see
+[docs/windows.md](docs/windows.md) for how it protects, what it's compatible with, and releasing.
 
 **Android.** Thurea runs a phone as its device owner, so it goes on at setup:
 

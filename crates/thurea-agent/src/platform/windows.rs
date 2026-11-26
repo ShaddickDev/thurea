@@ -1,39 +1,17 @@
-//! Windows: family DNS on every active adapter with DNS-over-HTTPS (no plain fallback),
-//! the hosts-file blocklist, Chrome/Edge/Brave policies in the registry, Firefox's
-//! policies.json, and a SYSTEM task that starts Thurea with Windows.
+//! Windows. Thurea.ps1 (windows/thurea) enforces the rules; this module asks it to and reads its
+//! report, and provides what the household mesh and children's accounts need from Windows.
 
-use super::{file_check, hosts_check, merge_hosts, run, write_if_changed};
-use thurea_core::status::dns_verdict;
-use thurea_core::{Check, Policy, Report, State};
+use super::run;
+use thurea_core::{Check, Policy, Report};
 use std::path::{Path, PathBuf};
 
 pub const PLATFORM: &str = "windows";
-const TASK: &str = "Thurea";
-
-/// HKLM policy keys of the Chromium browsers.
-const CHROMIUM_KEYS: &[(&str, &str)] = &[
-    ("Chrome", r"SOFTWARE\Policies\Google\Chrome"),
-    ("Edge", r"SOFTWARE\Policies\Microsoft\Edge"),
-    ("Brave", r"SOFTWARE\Policies\BraveSoftware\Brave"),
-];
 
 fn system_root() -> PathBuf {
     std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| r"C:\Windows".into())
 }
-fn hosts() -> PathBuf {
-    system_root().join(r"System32\drivers\etc\hosts")
-}
 fn install_dir() -> PathBuf {
     std::env::var_os("ProgramFiles").map(PathBuf::from).unwrap_or_else(|| r"C:\Program Files".into()).join("Thurea")
-}
-fn firefox_policy_files() -> Vec<PathBuf> {
-    ["ProgramFiles", "ProgramFiles(x86)"]
-        .iter()
-        .filter_map(std::env::var_os)
-        .map(|p| PathBuf::from(p).join("Mozilla Firefox"))
-        .filter(|d| d.is_dir())
-        .map(|d| d.join("distribution").join("policies.json"))
-        .collect()
 }
 
 pub fn is_admin() -> bool {
@@ -53,182 +31,83 @@ fn powershell(script: &str) -> Result<String, String> {
     run("powershell.exe", &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script])
 }
 
-/// (adapter, servers) for every connected adapter.
-fn adapter_dns() -> Result<Vec<(String, Vec<String>)>, String> {
-    let out = powershell(
-        "Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { $a=$_; \
-         $s=(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue | ForEach-Object ServerAddresses) -join ','; \
-         \"$($a.Name)|$s\" }",
-    )?;
-    Ok(out
-        .lines()
-        .filter_map(|l| l.trim().split_once('|'))
-        .map(|(n, s)| (n.to_string(), s.split(',').filter(|x| !x.is_empty()).map(String::from).collect()))
-        .collect())
-}
+// ── Enforcement: Thurea.ps1 is the only enforcer on Windows ──
+//
+// Thurea for Windows is enforced by Thurea.ps1 (its "\Thurea\Thurea" task, every 5 minutes, at
+// startup and on network changes). thurea.exe used to have its own enforcement here too, with a
+// different idea of the rules (the full hosts file, which stalls Windows' DNS Client for minutes;
+// no DNS fallback; its own startup task), and the two would undo each other. Now thurea.exe only
+// asks Thurea.ps1 and reads what it reports, so there is exactly one set of rules on the PC.
 
-fn apply_dns(p: &Policy) -> Result<(), String> {
-    let all: Vec<String> = p.family_dns.servers.iter().map(|s| format!("'{s}'")).collect();
-    let script = format!(
-        "$s=@({all}); $t='{doh}'; \
-         foreach($ip in $s){{ if(Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue){{ \
-           if(Get-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue){{ Set-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate $t -AllowFallbackToUdp $false -AutoUpgrade $true | Out-Null }} \
-           else {{ Add-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate $t -AllowFallbackToUdp $false -AutoUpgrade $true | Out-Null }} }} }}; \
-         Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {{ Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses $s }}; \
-         Clear-DnsClientCache",
-        all = all.join(","),
-        doh = p.doh_template()
-    );
-    powershell(&script).map(|_| ())
-}
-
-fn dns_check(p: &Policy) -> Check {
-    let adapters = match adapter_dns() {
-        Ok(a) => a,
-        Err(e) => return Check::unknown("dns", format!("Can't read DNS settings: {e}")),
-    };
-    if adapters.is_empty() {
-        return Check::unknown("dns", "No connected network adapters");
+/// Thurea.ps1 as installed, or (before installing) the one shipped next to thurea.exe.
+fn enforcer() -> Option<PathBuf> {
+    let installed = install_dir().join("Thurea.ps1");
+    if installed.is_file() {
+        return Some(installed);
     }
-    for (name, servers) in &adapters {
-        match dns_verdict(servers, &p.family_dns.servers) {
-            (State::Ok, _) => {}
-            (State::Unknown, _) => return Check::degraded("dns", format!("{name} has no DNS set (uses the router's)")),
-            (_, bad) => return Check::degraded("dns", format!("{name} uses DNS {}, which isn't filtered", bad.unwrap_or_default())),
+    let me = std::env::current_exe().ok()?;
+    let beside = me.parent()?.join("Thurea.ps1");
+    beside.is_file().then_some(beside)
+}
+
+fn run_enforcer(arg: &str) -> Result<String, String> {
+    let ps1 = enforcer().ok_or("Thurea.ps1 isn't installed: run Thurea\\Install Thurea.cmd from thurea-windows.zip")?;
+    let ps = system_root().join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+    run(&ps.to_string_lossy(), &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", &ps1.to_string_lossy(), arg])
+}
+
+/// Readable names for Thurea.ps1's checks (status.json).
+fn check_label(id: &str) -> &str {
+    match id {
+        "hosts" => "hosts file block list",
+        "dns" => "family DNS on every adapter",
+        "firewall" => "firewall DNS lockdown",
+        "browsers" => "browser policies",
+        "managed" => "browsers accept the Thurea extension",
+        "extensionServer" => "extension update server",
+        "edgeRemoved" => "Edge removed",
+        "tasks" => "Thurea's tasks",
+        "uninstallBlock" => "uninstall block",
+        other => other,
+    }
+}
+
+/// The report from Thurea.ps1's last run (status.json), one check per item.
+pub fn check(_p: &Policy) -> Report {
+    let v = super::desktop_status();
+    let mut r = Report::default();
+    match v["checks"].as_object() {
+        Some(m) if v["state"] != "stale" && v["state"] != "unknown" => {
+            for (id, ok) in m {
+                let label = check_label(id);
+                r.push(if ok.as_bool() == Some(true) { Check::ok(id, label.to_string()) } else { Check::degraded(id, format!("Not in place: {label}")) });
+            }
         }
+        _ => r.push(Check::unknown("service", v["line"].as_str().unwrap_or("Thurea isn't reporting").to_string())),
     }
-    Check::ok("dns", "Family DNS locked on every adapter (encrypted)")
+    r
 }
 
-/// A .reg file for one browser's policy key.
-fn reg_file(key: &str, p: &Policy) -> String {
-    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-    let mut s = format!("Windows Registry Editor Version 5.00\r\n\r\n[-HKEY_LOCAL_MACHINE\\{key}\\URLBlocklist]\r\n\r\n[HKEY_LOCAL_MACHINE\\{key}]\r\n");
-    let pol = p.chromium_policy();
-    for (k, v) in pol.as_object().unwrap() {
-        match v {
-            serde_json::Value::String(x) => s.push_str(&format!("\"{k}\"=\"{}\"\r\n", esc(x))),
-            serde_json::Value::Bool(b) => s.push_str(&format!("\"{k}\"=dword:{:08x}\r\n", *b as u32)),
-            serde_json::Value::Number(n) => s.push_str(&format!("\"{k}\"=dword:{:08x}\r\n", n.as_u64().unwrap_or(0))),
-            _ => {}
-        }
-    }
-    s.push_str(&format!("\r\n[HKEY_LOCAL_MACHINE\\{key}\\URLBlocklist]\r\n"));
-    for (i, d) in p.blocklist.iter().enumerate() {
-        s.push_str(&format!("\"{}\"=\"{}\"\r\n", i + 1, esc(d)));
-    }
-    s
-}
-
-fn utf16(s: &str) -> Vec<u8> {
-    let mut b = vec![0xFF, 0xFE];
-    for u in s.encode_utf16() {
-        b.extend_from_slice(&u.to_le_bytes());
-    }
-    b
-}
-
-/// Registry state of a browser key that we compare against (values Thurea sets).
-fn chromium_ok(key: &str, p: &Policy) -> bool {
-    let full = format!(r"HKLM\{key}");
-    let Ok(main) = run("reg", &["query", &full]) else { return false };
-    let doh = main.lines().any(|l| l.contains("DnsOverHttpsTemplates") && l.contains(&p.doh_template()));
-    let n = run("reg", &["query", &format!(r"{full}\URLBlocklist")]).map(|o| o.lines().filter(|l| l.contains("REG_SZ")).count()).unwrap_or(0);
-    doh && n == p.blocklist.len()
-}
-
+/// Asks Thurea.ps1 to put every rule back now, then reports.
 pub fn apply(p: &Policy) -> Report {
     let mut r = Report::default();
-
-    if dns_check(p).state != State::Ok {
-        if let Err(e) = apply_dns(p) {
-            r.push(Check::degraded("dns", format!("Can't set family DNS: {e}")));
-        }
+    if let Err(e) = run_enforcer("-Apply") {
+        r.push(Check::degraded("service", format!("Thurea.ps1 -Apply failed: {e}")));
     }
-
-    let h = hosts();
-    if let Ok(cur) = std::fs::read_to_string(&h) {
-        let _ = write_if_changed(&h, merge_hosts(&cur, Some(p), "\r\n").as_bytes());
-    }
-
-    for (_, key) in CHROMIUM_KEYS {
-        if !chromium_ok(key, p) {
-            let f = std::env::temp_dir().join("thurea-policy.reg");
-            if std::fs::write(&f, utf16(&reg_file(key, p))).is_ok() {
-                let _ = run("reg", &["import", &f.to_string_lossy()]);
-            }
-            let _ = std::fs::remove_file(f);
-        }
-    }
-
-    let ff = serde_json::to_vec_pretty(&p.firefox_policy()).unwrap();
-    for f in firefox_policy_files() {
-        let _ = write_if_changed(&f, &ff);
-    }
-
     let mut checked = check(p);
     checked.checks.splice(0..0, r.checks);
     checked
 }
 
-pub fn check(p: &Policy) -> Report {
-    let mut r = Report::default();
-    r.push(dns_check(p));
-    r.push(hosts_check(&hosts(), p, "\r\n"));
-    let bad: Vec<&str> = CHROMIUM_KEYS.iter().filter(|(_, k)| !chromium_ok(k, p)).map(|(n, _)| *n).collect();
-    r.push(if bad.is_empty() {
-        Check::ok("chromium", "Chrome, Edge, Brave locked: family DNS, SafeSearch, no private windows")
-    } else {
-        Check::degraded("chromium", format!("Browser policy missing or changed: {}", bad.join(", ")))
-    });
-    let ff = serde_json::to_vec_pretty(&p.firefox_policy()).unwrap();
-    for f in firefox_policy_files() {
-        r.push(file_check("firefox", "Firefox", &f, &ff));
-    }
-    r.push(match run("schtasks", &["/Query", "/TN", TASK]) {
-        Ok(_) => Check::ok("service", "Thurea starts with Windows"),
-        Err(_) => Check::degraded("service", "Thurea is not set to start with Windows (run `thurea install`)"),
-    });
-    r
-}
-
+/// Installs Thurea for Windows (Thurea.ps1 -Install: files, tasks, rules).
 pub fn install() -> Result<String, String> {
-    let dir = install_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let bin = dir.join("thurea.exe");
-    let me = std::env::current_exe().map_err(|e| e.to_string())?;
-    if me != bin {
-        // A running copy can't be overwritten: stop it first.
-        let _ = run("schtasks", &["/End", "/TN", TASK]);
-        std::fs::copy(&me, &bin).map_err(|e| format!("{}: {e}", bin.display()))?;
-    }
-    let tr = format!("\"{}\" run", bin.display());
-    run("schtasks", &["/Create", "/F", "/TN", TASK, "/SC", "ONSTART", "/RU", "SYSTEM", "/RL", "HIGHEST", "/TR", &tr])?;
-    // Restart if it stops, and keep running on battery.
-    let _ = powershell(&format!(
-        "$s=New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0; Set-ScheduledTask -TaskName '{TASK}' -Settings $s | Out-Null"
-    ));
-    let _ = run("netsh", &["advfirewall", "firewall", "add", "rule", "name=Thurea mesh", "dir=in", "action=allow", "protocol=UDP", "localport=47823"]);
-    run("schtasks", &["/Run", "/TN", TASK])?;
-    Ok(format!("Installed {} and the Thurea startup task", bin.display()))
+    run_enforcer("-Install").map(|out| format!("{}\nThurea for Windows is installed", out.trim_end()))
 }
 
+/// Thurea for Windows is meant to stay (its tasks put each other back), so thurea.exe doesn't
+/// take it apart: half-removed rules would be restored within 5 minutes anyway.
 pub fn uninstall() -> Result<String, String> {
-    let _ = run("schtasks", &["/End", "/TN", TASK]);
-    let _ = run("schtasks", &["/Delete", "/F", "/TN", TASK]);
-    for (_, key) in CHROMIUM_KEYS {
-        let _ = run("reg", &["delete", &format!(r"HKLM\{key}"), "/f"]);
-    }
-    for f in firefox_policy_files() {
-        let _ = std::fs::remove_file(f);
-    }
-    let h = hosts();
-    if let Ok(cur) = std::fs::read_to_string(&h) {
-        let _ = std::fs::write(&h, merge_hosts(&cur, None, "\r\n"));
-    }
-    let _ = powershell("Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }");
-    let _ = run("netsh", &["advfirewall", "firewall", "delete", "rule", "name=Thurea mesh"]);
-    Ok("Thurea's rules were removed. Config is kept in ProgramData\\Thurea.".into())
+    Err("Thurea for Windows can't be removed with thurea.exe. See docs/windows.md, \"Removing Thurea\".".into())
 }
 
 /// A message box on every signed-in session (msg.exe; not present on Windows Home).
