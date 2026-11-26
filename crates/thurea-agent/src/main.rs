@@ -226,7 +226,7 @@ fn dispatch(args: &[String]) -> Result<String, String> {
         "family" => family::run(args),
         // Chrome starts this as the browser extension's helper; nothing else may print.
         "family-host" => family::host(),
-        "control-center" => control::run(),
+        "control-center" => control::run(args),
         "relay" => {
             let port: u16 = flag(args, "--port").map(|p| p.parse().map_err(|_| "port must be a number")).transpose()?.unwrap_or(thurea_core::relay::PORT);
             let stop = std::sync::atomic::AtomicBool::new(false);

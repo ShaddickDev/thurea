@@ -534,13 +534,49 @@ namespace Thurea
         }
 
         /// The parents' control center (a page served by thurea.exe on this PC only, opened in the browser).
+        /// `thurea control-center` returns within seconds (the page's server keeps running on its
+        /// own): if it failed, say why; if no browser window could be opened, it printed the address.
         public void OpenFamily()
         {
+            Process p;
+            var output = new StringBuilder();
             try
             {
-                Process.Start(new ProcessStartInfo(Path.Combine(Paths.Home, "thurea.exe"), "control-center") { UseShellExecute = false, CreateNoWindow = true });
+                p = new Process { StartInfo = new ProcessStartInfo(Path.Combine(Paths.Home, "thurea.exe"), "control-center")
+                    { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true } };
+                // Events, not ReadToEnd: the server it starts may hold the pipes open for a while.
+                DataReceivedEventHandler collect = (s, e) => { if (e.Data != null) lock (output) output.AppendLine(e.Data); };
+                p.OutputDataReceived += collect;
+                p.ErrorDataReceived += collect;
+                p.Start();
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
             }
-            catch (Exception e) { MessageBox.Show("Couldn't open the family control center: " + e.Message, "Thurea"); }
+            catch (Exception e) { MessageBox.Show("Couldn't open the family control center: " + e.Message, "Thurea"); return; }
+            new Thread(() =>
+            {
+                try
+                {
+                    if (!p.WaitForExit(30000)) return;
+                    Thread.Sleep(300);
+                    string text; lock (output) text = output.ToString().Trim();
+                    int code = p.ExitCode;
+                    ui.BeginInvoke((MethodInvoker)delegate
+                    {
+                        if (code != 0)
+                        {
+                            MessageBox.Show("Couldn't open the family control center:\n\n" + text.Replace("thurea: ", ""), "Thurea", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        int at = text.IndexOf("http://127.0.0.1:");
+                        if (at < 0) return;
+                        string url = text.Substring(at).Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)[0];
+                        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+                        catch (Exception) { MessageBox.Show("Open this address in a browser on this PC:\n\n" + url, "Thurea family"); }
+                    });
+                }
+                catch (Exception) { }
+            }) { IsBackground = true }.Start();
         }
 
         // "Keep my phone" (set up a phone in use, without a reset) is the first choice.

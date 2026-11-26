@@ -113,9 +113,14 @@ then marks each child's device from the household's device list.
   run out re-freeze the app by themselves.
 * **Adults' devices** keep exactly the protection they had; family rules never loosen them.
 
-* **Control center (every desktop):** Family in the Omarchy bar, the Linux tray or the Windows
-  tray opens `thurea control-center`: requests to answer, each child's rules, the household's
-  devices, and the relay. It runs as you — no admin — and signs changes with *your* parent key
+* **Control center (every desktop):** Family in the Omarchy bar, the Linux tray, the Windows
+  tray or the browser extension's Thurea tab opens `thurea control-center`: an overview of what's
+  waiting and each child's day, a page per child (screen time, Pause / Lock now / extra time,
+  offline codes, what they may use, always-allowed apps, approvals), the household's devices,
+  parents and the relay. It opens as an app window in Edge, Chrome, Chromium, Brave or Vivaldi
+  (whichever is installed, under any distro's name for it), else the default browser, and follows
+  the system's light or dark mode; see [docs/family.md](docs/family.md). It runs as you — no
+  admin — and signs changes with *your* parent key
   (`~/.config/thurea/parent.key`, `%APPDATA%\Thurea\parent.key`); Thurea's service only takes a
   change a parent signed, so a child on the same computer can't make one. Starting a family on a
   computer asks for admin once.
