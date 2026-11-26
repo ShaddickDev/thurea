@@ -6,7 +6,7 @@ device in the household, and is hard to switch off. One project, one version, on
 | Platform | What it does | Installs from |
 |---|---|---|
 | **Windows** | Family DNS (Cloudflare for Families) on every network, other DNS servers and public DNS-over-HTTPS blocked in the firewall, every Chromium browser locked (Thurea extension force-installed, SafeSearch, no incognito/guest), Firefox policies, Tor/Mullvad/Opera blocked, can't be uninstalled (tasks restore each other, no Uninstall in Settings), tray app (status, verse of the day, phone setup by QR) | `thurea-windows.zip` → `Thurea\Install Thurea.cmd`, or the Thurea Windows 11 ISO (`windows/`) |
-| **Linux** (Arch / Omarchy, Debian / Ubuntu, Fedora) | The same, plus a hosts block of 64,000+ domains, nftables DNS lockdown, and a package that can't be removed (pacman hook / apt `Protected` / dnf protected packages). **Omarchy first:** Thurea installs itself into the Omarchy bar (status, verse of the day, family, phone setup by QR); other desktops get `thurea-tray` | `thurea-linux.pkg.tar.zst` · `thurea-linux.deb` · `thurea-linux.rpm` |
+| **Linux** (Arch / Omarchy, Debian / Ubuntu, Fedora) | The same, plus a hosts block of 64,000+ domains, nftables DNS lockdown, and a package that can't be removed (pacman hook / apt `Protected` / dnf protected packages). **Omarchy first:** [Omarea](docs/omarea.md), Thurea made for Omarchy, fits itself in: bar widget, notifications, Omarchy menu, keybindings, the theme's colours (status, verse of the day, family, phone setup by QR); other desktops get `thurea-tray` | `thurea-linux.pkg.tar.zst` · `thurea-linux.deb` · `thurea-linux.rpm` |
 | **Android** | Device owner: family DNS, private DNS/VPN checks, locked apps, YouTube ad blocker, household mesh; set up with one QR scan (`thurea setup-phone`) | `thurea-android.apk` |
 | **Browser extension** | Ads, trackers, pop-unders, cookie banners, YouTube ads and SponsorBlock, video downloads at every resolution (through Thurea's downloader, shared with its Downloads page); adult sites blocked when the `pornBlock` policy is set (the desktop platforms set it). Force-installed in every Chromium browser (Chrome, Edge, Brave, Vivaldi…) and every Firefox-family one (Firefox, LibreWolf, Waterfox, Zen, Floorp), snap and Flatpak copies included | inside every desktop package; `thurea-extension.crx`, `thurea-extension-firefox.xpi` |
 
@@ -38,16 +38,18 @@ sudo apt install ./thurea-linux.deb
 sudo dnf install https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.rpm
 ```
 
-**Omarchy bar plugin.** The package puts Thurea in the Omarchy bar by itself. To add it again
-(after removing it from the bar, or on a new Omarchy install), either of:
+**Omarea on Omarchy.** The package fits Omarea, Thurea's Omarchy app, into every Omarchy user's
+desktop by itself: the widget in the bar (Waybar on Omarchy 3), an **Omarea** submenu in the
+Omarchy menu (SUPER + SPACE), **SUPER + CTRL + U** for Omarea and **SUPER + SHIFT + CTRL + U** for
+Family, notifications when a child asks for something, and Omarchy's theme everywhere, the family
+centre included. Everything is in [docs/omarea.md](docs/omarea.md).
 
 ```sh
-omarchy plugin add https://github.com/ShaddickDev/thurea.git --enable   # Omarchy's own plugin manager
-thurea-omarchy install                                                    # from the Thurea package
+omarea doctor      # check that every piece is in place
+omarea install     # put Omarea back (after taking it out of the bar, or on a new Omarchy install)
+omarea uninstall   # take it out of the desktop again (Thurea's protection stays exactly as it is)
+omarchy plugin add https://github.com/ShaddickDev/thurea.git --enable   # the widget alone, from Omarchy's plugin manager
 ```
-
-The plugin shows Thurea's status and the family; without the Thurea package it only says how to
-install it.
 
 **Windows 10 / 11.** Download `thurea-windows.zip`, extract it, right-click
 `Thurea\Install Thurea.cmd` → *Run as administrator*. (Or build the Thurea Windows 11 ISO from
@@ -58,7 +60,7 @@ anti-cheat (Valorant's Vanguard, Easy Anti-Cheat, BattlEye) keep working: see
 
 **Android.** Thurea runs a phone as its device owner, so it goes on at setup:
 
-* *New or factory-reset phone:* on a computer with Thurea, open the tray / Omarchy bar →
+* *New or factory-reset phone:* on a computer with Thurea, open the tray / Omarea →
   **Set up a phone** (or `thurea setup-phone`), tap the phone's first Welcome screen 6 times and
   scan the code.
 * *Phone already in use, nothing erased:* **Keep my phone** in the same window (or
@@ -76,7 +78,7 @@ the adult protection, children get the stricter one, and one family links them.
    (Set up a phone / Keep my phone) join it by themselves; a phone that already has Thurea joins
    with `sudo thurea pair-android` over USB.
 2. **Start the family** on a parent's device: on the phone, Thurea → **Family** → *Start a
-   family*; on a computer, **Family** in the tray or Omarchy bar (it asks for admin once), or
+   family*; on a computer, **Family** in the tray or Omarea (it asks for admin once), or
    `sudo thurea family create "Your name"`.
 3. **The other parent:** on their phone, Family → *I'm a parent too*; on their computer,
    `thurea family join "Name"`. Approve it on your device only if both show the same 6-digit code.
@@ -113,13 +115,13 @@ then marks each child's device from the household's device list.
   run out re-freeze the app by themselves.
 * **Adults' devices** keep exactly the protection they had; family rules never loosen them.
 
-* **Control center (every desktop):** Family in the Omarchy bar, the Linux tray, the Windows
+* **Control center (every desktop):** Family in Omarea, the Linux tray, the Windows
   tray or the browser extension's Thurea tab opens `thurea control-center`: an overview of what's
   waiting and each child's day, a page per child (screen time, Pause / Lock now / extra time,
   offline codes, what they may use, always-allowed apps, approvals), the household's devices,
   parents and the relay. It opens as an app window in Edge, Chrome, Chromium, Brave or Vivaldi
   (whichever is installed, under any distro's name for it), else the default browser, and follows
-  the system's light or dark mode; see [docs/family.md](docs/family.md). It runs as you — no
+  the system's light or dark mode (on Omarchy, the current Omarchy theme, live as you switch); see [docs/family.md](docs/family.md). It runs as you — no
   admin — and signs changes with *your* parent key
   (`~/.config/thurea/parent.key`, `%APPDATA%\Thurea\parent.key`); Thurea's service only takes a
   change a parent signed, so a child on the same computer can't make one. Starting a family on a
@@ -162,7 +164,7 @@ messages (it can't read or change them) and stores nothing.
   `thurea family check` shows what Thurea would do, without doing it.
 
 
-## Desktop apps (Omarchy plugin, Linux tray, Windows tray)
+## Desktop apps (Omarea on Omarchy, Linux tray, Windows tray)
 
 Every desktop has the same Thurea app:
 
@@ -182,7 +184,7 @@ Every desktop has the same Thurea app:
 
 | | Where | Built from |
 |---|---|---|
-| Omarchy | bar plugin `thurea.omarchy`: added to every Omarchy user's bar by the package, or with `omarchy plugin add https://github.com/ShaddickDev/thurea.git` (the repository's root `manifest.json` points at the plugin) | `linux/omarchy-plugin/thurea/` (QML) + `thurea` (Rust) |
+| Omarchy | **Omarea**: shell plugin `thurea.omarea` (bar widget + notification service) on Omarchy 4, a Waybar module on Omarchy 3, menu entries and keybindings; fitted in by the package (`omarea install`), or the widget alone with `omarchy plugin add https://github.com/ShaddickDev/thurea.git` (the repository's root `manifest.json` points at the plugin). See [docs/omarea.md](docs/omarea.md) | `linux/omarchy-plugin/omarea/` (QML) + `linux/files/omarea` + `thurea` (Rust) |
 | Other Linux desktops | `thurea-tray` (StatusNotifier tray; its window is a local page) | `crates/thurea-tray/` (Rust) |
 | Windows | `ThureaTray.exe`, compiled on the PC by Windows' own C# compiler | `windows/thurea/tray/` |
 | Android | the app itself | `android/` |
@@ -245,11 +247,11 @@ manifest), `~/.config/thurea/extension-key.pem` (extension ID), and the Android 
 ```
 extension/   the Thurea browser extension (and host/, its optional native helper)
 linux/       Thurea for Linux: stage.sh (one file layout) → PKGBUILD (Arch), debian/ (.deb), rpm/ (.rpm);
-             thurea-apply, systemd units, pacman hooks, self-update, the Omarchy plugin
+             thurea-apply, systemd units, pacman hooks, self-update, Omarea (the Omarchy plugin and `omarea`)
 windows/     Thurea for Windows (thurea/Thurea.ps1, tray app) and the Windows 11 ISO build
 android/     Thurea for Android
 crates/      Rust: thurea-core (shared by Android and desktop), thurea-agent (`thurea`: phone setup,
-             verses, status, household mesh), thurea-tray (Linux tray outside Omarchy)
+             verses, status, household mesh), thurea-tray (Linux tray outside Omarchy 4)
 policy/      verses.json (World English Bible), blocklist.txt, update-lists.sh
 bend/        audit.bend: bulk blocklist audits on the Bend/HVM parallel runtime (`thurea audit --engine bend`);
              tests/ and test.sh: Bend property tests for bedtime windows and the audit (`bend/test.sh`)

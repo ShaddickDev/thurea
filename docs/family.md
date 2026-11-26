@@ -7,7 +7,7 @@ family policy, so whatever a parent does on one shows on the other within a minu
 | Where | How a parent opens it |
 |---|---|
 | Windows 10 / 11 | Tray icon → **Family…**, or the **Family** button in the Thurea window |
-| Arch / Omarchy | Omarchy bar → Thurea → **Family** (or the family summary in the panel) |
+| Arch / Omarchy | Omarea in the bar → **Family** (or the family summary in the panel), SUPER + SHIFT + CTRL + U, or Omarchy menu → Omarea → Family |
 | Debian / Ubuntu, Fedora and other desktops | `thurea-tray` → **Family…** |
 | Any desktop with Chrome, Edge, Chromium or Brave | The Thurea extension's tab → **Family** |
 | Any computer, from a terminal | `thurea control-center` (`--no-browser` prints the address instead) |
@@ -35,7 +35,7 @@ parent is typing or reading a dialog.
 `thurea control-center` is a launcher. It looks for a control center already running for this
 user (it asks it, rather than trusting a leftover file); if there is none it starts one in the
 background (`thurea control-center --serve`) and waits for it to answer. Then it opens a window
-and returns, so a tray, the Omarchy bar or the extension can open Family again at any time.
+and returns, so a tray, Omarea or the extension can open Family again at any time.
 
 The window is an app window of the first Chromium-family browser it finds: Edge (on every
 Windows 10 / 11), Chrome, Brave on Windows; `chromium`, `chromium-browser`,

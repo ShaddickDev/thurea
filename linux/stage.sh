@@ -16,21 +16,27 @@ inst() { install -Dm"$1" "$2" "$D/$3"; }
 inst 755 "$F/thurea-apply"       usr/lib/thurea/thurea-apply
 inst 755 "$F/thurea-update"      usr/lib/thurea/thurea-update
 inst 755 "$F/thurea-omarchy"     usr/lib/thurea/thurea-omarchy
+inst 755 "$F/omarea"             usr/lib/thurea/omarea
 inst 755 "$F/thurea-family-host" usr/lib/thurea/thurea-family-host
 inst 644 "$F/thurea-tray.desktop" etc/xdg/autostart/thurea-tray.desktop
 install -dm755 "$D/usr/bin"
 ln -sf /usr/lib/thurea/thurea-update  "$D/usr/bin/thurea-update"
 ln -sf /usr/lib/thurea/thurea-omarchy "$D/usr/bin/thurea-omarchy"
+ln -sf /usr/lib/thurea/omarea         "$D/usr/bin/omarea"
 for u in thurea.service thurea.timer thurea.path thurea-extensions.service thurea-update.service thurea-update.timer thurea-mesh.service; do
   inst 644 "$F/$u" "usr/lib/systemd/system/$u"
 done
 for f in resolved.conf networkmanager-dns.conf apt-deny-browsers dnf-deny-browsers.conf thurea.nft README; do
   inst 644 "$F/$f" "usr/share/thurea/$f"
 done
-# Omarchy first: Thurea's bar plugin (linked into every Omarchy user's plugins by thurea-omarchy).
+# Omarchy first: Omarea, Thurea's Omarchy app. The shell plugin (linked into every Omarchy user's
+# plugins by `omarea install`, which thurea-omarchy runs for each of them), its launcher entries
+# and icon.
 install -dm755 "$D/usr/share/thurea"
-cp -r "$L/omarchy-plugin/thurea" "$D/usr/share/thurea/omarchy-plugin"
+cp -r "$L/omarchy-plugin/omarea" "$D/usr/share/thurea/omarchy-plugin"
 find "$D/usr/share/thurea/omarchy-plugin" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
+for a in omarea omarea-family omarea-phone; do inst 644 "$F/$a.desktop" "usr/share/applications/$a.desktop"; done
+inst 644 "$L/../extension/icons/thurea.svg" usr/share/icons/hicolor/scalable/apps/omarea.svg
 
 # The Rust agent and tray, the Android app the phone setup serves, the shared data.
 inst 755 "$DATA/thurea"      usr/bin/thurea

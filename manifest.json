@@ -1,20 +1,22 @@
 {
   "schemaVersion": 1,
-  "id": "thurea.omarchy",
-  "name": "Thurea",
+  "id": "thurea.omarea",
+  "name": "Omarea",
   "version": "1.0.0",
   "author": "Thurea",
   "license": "MIT",
-  "description": "Thurea family protection in the Omarchy bar: protection status, the verse of the day, and one-scan setup for Android phones. Installed from this repository with `omarchy plugin add`; Thurea itself comes from your package manager.",
+  "description": "Omarea: Thurea family protection made for Omarchy. Protection status, the family's requests and screen time, the verse of the day and one-scan phone setup in the bar, with Omarchy notifications when something needs a parent. Installed from this repository with `omarchy plugin add`; Thurea itself comes from your package manager.",
   "kinds": [
-    "bar-widget"
+    "bar-widget",
+    "service"
   ],
   "entryPoints": {
-    "barWidget": "linux/omarchy-plugin/thurea/Panel.qml"
+    "barWidget": "linux/omarchy-plugin/omarea/Panel.qml",
+    "service": "linux/omarchy-plugin/omarea/Service.qml"
   },
   "barWidget": {
-    "displayName": "Thurea",
-    "description": "Shows whether this computer is protected, the verse of the day, and a QR code to set up a new Android phone with Thurea. Middle-click: set up a phone.",
+    "displayName": "Omarea",
+    "description": "Thurea in the bar: whether this computer is protected, family requests waiting (a dot on the icon), each child's screen time, the verse of the day and phone setup. Click: open. Middle-click: set up a phone. Keys in the panel: F family, D downloads, P phone, R re-apply, S settings.",
     "category": "Status",
     "allowMultiple": false,
     "defaultSection": "right"

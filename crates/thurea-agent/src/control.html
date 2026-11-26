@@ -723,9 +723,61 @@ function downloadsPage() {
     h("p.muted", { style: "margin:12px 6px 0" }, "The same list as Thurea's Download menu in Chrome, Edge, Brave, Firefox and the rest: start a download in one and follow it in the other.")];
 }
 
+// ── Omarchy: the page wears the desktop's theme, and changes with it ──
+// /api/theme is the current Omarchy theme's colors.toml ({} elsewhere: the page's own light and
+// dark colours stay). Omarchy 3 themes have no named red / green / yellow: their color1-3 are.
+let themeStamp = null;
+function hex(c) { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function mix(a, b, t) { const x = hex(a), y = hex(b); return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join(""); }
+function lum(c) { const [r, g, b] = hex(c).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * r + .7152 * g + .0722 * b; }
+function contrast(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); }
+function applyTheme(t) {
+  const c = t && t.colors, root = document.documentElement.style;
+  const names = ["--bg", "--surface", "--surface-2", "--line", "--text", "--muted", "--accent", "--accent-soft", "--accent-ink", "--good", "--good-soft", "--warn", "--warn-soft", "--bad", "--bad-soft"];
+  if (!c || !c.background || !c.foreground) { names.forEach(n => root.removeProperty(n)); delete document.documentElement.dataset.omarchy; return; }
+  const bg = c.background, fg = c.bright_foreground || c.foreground;
+  const light = c.mode ? c.mode === "light" : (t.light || lum(bg) > .45);
+  const accent = c.accent || c.blue || c.color4 || "#7aa2f7";
+  const pick = (...k) => k.map(x => c[x]).find(Boolean);
+  const good = pick("green", "color2") || "#4ade80", warn = pick("yellow", "color3") || "#fbbf24", bad = pick("red", "color1") || "#f87171";
+  const soft = x => mix(bg, x, light ? .14 : .2);
+  // Secondary text: the theme's own dim colour if it reads well (4.5:1 on a card), else the
+  // text colour faded only as far as stays readable.
+  const surface = c.lighter_background || mix(bg, fg, light ? .03 : .05);
+  let muted = c.dark_foreground;
+  if (!muted || contrast(muted, surface) < 4.5) {
+    for (let t = .45; t >= 0; t -= .05) { muted = mix(fg, bg, t); if (contrast(muted, surface) >= 4.5) break; }
+  }
+  const v = {
+    "--bg": bg,
+    "--surface": surface,
+    "--surface-2": mix(bg, fg, light ? .07 : .1),
+    "--line": mix(bg, fg, light ? .14 : .16),
+    "--text": fg,
+    "--muted": muted,
+    "--accent": accent, "--accent-soft": soft(accent),
+    "--accent-ink": contrast(accent, "#ffffff") >= contrast(accent, bg) ? "#ffffff" : bg,
+    "--good": good, "--good-soft": soft(good), "--warn": warn, "--warn-soft": soft(warn), "--bad": bad, "--bad-soft": soft(bad),
+  };
+  for (const n in v) root.setProperty(n, v[n]);
+  document.documentElement.style.colorScheme = light ? "light" : "dark";
+  document.documentElement.dataset.omarchy = t.name || "theme";
+}
+async function loadTheme() {
+  try {
+    const r = await fetch("/api/theme?t=" + T, { cache: "no-store" });
+    if (!r.ok) return;
+    const t = await r.json();
+    const stamp = JSON.stringify([t.stamp, t.name]);
+    if (stamp !== themeStamp) { themeStamp = stamp; applyTheme(t); }
+  } catch (e) { /* the page's own colours stay */ }
+}
+
+loadTheme();
 load(true);
 setInterval(() => load(false), 4000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) load(false); });
+setInterval(loadTheme, 3000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { load(false); loadTheme(); } });
 </script>
 </body>
 </html>

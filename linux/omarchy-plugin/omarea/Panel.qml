@@ -8,13 +8,19 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 
-// Thurea in the Omarchy bar: whether this computer is protected, the verse of the day, phone
-// setup by QR code, and Thurea's settings. Everything comes from the `thurea` command (Thurea's
-// Rust agent, /usr/bin/thurea), so the plugin itself holds no logic and no secrets.
+// Omarea: Thurea, made for Omarchy. In the bar: whether this computer is protected, the verse of
+// the day, the family, phone setup by QR code, and Thurea's settings. Everything comes from the
+// `thurea` command (Thurea's Rust agent, /usr/bin/thurea), so the plugin itself holds no logic and
+// no secrets. Its colours, fonts and motion are Omarchy's (qs.Commons), so it follows every theme
+// switch on its own. Service.qml (the same plugin) sends the notifications.
+//
+// IPC (also what SUPER + CTRL + U and the Omarchy menu use, through `omarea`):
+//   omarchy-shell thurea.omarea toggle | open | close | setupPhone | keepPhone | settings |
+//                               family | downloads | reapply | refresh | status
 Panel {
   id: root
-  moduleName: "thurea.omarchy"
-  ipcTarget: "thurea.omarchy"
+  moduleName: "thurea.omarea"
+  ipcTarget: "thurea.omarea"
   manageIpc: false
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
@@ -41,7 +47,7 @@ Panel {
     }
     return out
   }
-  readonly property int familyWaiting: family && family.inbox ? family.inbox.length : 0
+  readonly property int familyWaiting: family && family.parent === true && family.inbox ? family.inbox.length : 0
   function duration(m) { return m >= 60 ? Math.floor(m / 60) + " h " + ("0" + (m % 60)).slice(-2) + " min" : m + " min" }
   readonly property bool isProtected: status.state === "ok"
   property string actionText: ""
@@ -61,6 +67,12 @@ Panel {
     var p = Object.assign({}, prefs); p[key] = on; prefs = p      // flips at once; the file follows
     setProc.command = [thureaBin, "prefs", "set", key, on ? "on" : "off"]
     setProc.running = true
+  }
+  // The family control centre (`thurea control-center`), optionally on one of its pages.
+  function openFamily(page) {
+    root.close()
+    openProc.command = page ? [root.thureaBin, "control-center", "--page", page] : [root.thureaBin, "control-center"]
+    openProc.running = true
   }
   function reapply() {
     actionText = strings.t("action.reapplying")
@@ -130,7 +142,10 @@ Panel {
     function keepPhone(): void { phone.show("keep") }
     function closePhone(): void { phone.hide() }
     function settings(): void { root.open(); root.settingsOpen = true }
-    function family(): void { openProc.command = [root.thureaBin, "control-center"]; openProc.running = true }
+    function family(): void { root.openFamily("") }
+    function downloads(): void { root.openFamily("downloads") }
+    function reapply(): void { root.open(); root.reapply() }
+    function refresh(): void { root.refresh() }
     function status(): string { return root.isProtected ? strings.t("status.protected") : (root.status.line || "") }
   }
 
@@ -149,6 +164,20 @@ Panel {
           tint: root.barForeground
           warning: !root.isProtected && root.status.state !== "unknown"
           opacity: root.status.state === "unknown" ? 0.55 : 1
+        }
+        // Family requests waiting: a dot in the theme's accent, like Omarchy's own indicators.
+        Rectangle {
+          visible: root.familyWaiting > 0
+          width: Math.max(4, Math.round(button.iconSize * 0.34))
+          height: width
+          radius: width / 2
+          color: Commons.Color.accent
+          border.width: 1
+          border.color: Commons.Color.bar.background
+          anchors.right: parent.right
+          anchors.top: parent.top
+          anchors.rightMargin: -width / 4
+          anchors.topMargin: -width / 4
         }
       }
     }
@@ -179,6 +208,8 @@ Panel {
         if (t === "p" || t === "P") phone.show()
         else if (t === "r" || t === "R") root.reapply()
         else if (t === "s" || t === "S") root.settingsOpen = !root.settingsOpen
+        else if (t === "f" || t === "F") root.openFamily("")
+        else if (t === "d" || t === "D") root.openFamily("downloads")
       }
 
       Flickable {
@@ -209,7 +240,7 @@ Panel {
             ColumnLayout {
               Layout.fillWidth: true
               spacing: Style.space(2)
-              PlainText { text: "Thurea"; font.pixelSize: Style.font.title; font.bold: true }
+              PlainText { text: "Omarea"; font.pixelSize: Style.font.title; font.bold: true }
               PlainText {
                 Layout.fillWidth: true
                 text: root.isProtected ? strings.t("status.protected") : (root.status.line || strings.t("status.checking"))
@@ -320,7 +351,7 @@ Panel {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: { root.close(); openProc.command = [root.thureaBin, "control-center"]; openProc.running = true }
+              onClicked: root.openFamily("")
             }
             Column {
               id: familyCol
@@ -371,7 +402,7 @@ Panel {
               bordered: true
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: { root.close(); openProc.command = [root.thureaBin, "control-center"]; openProc.running = true }
+              onClicked: root.openFamily("")
             }
             Button {
               text: strings.t("action.reapply")
