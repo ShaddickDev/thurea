@@ -4,8 +4,13 @@
 # Android targets, and the Android SDK where android/build.sh expects it (~/Android/Sdk).
 set -euo pipefail
 pacman -Syu --noconfirm --needed git sudo rustup mingw-w64-gcc chromium dpkg rpm-tools mono github-cli \
-  jdk17-openjdk python openssl unzip zip nodejs npm osslsigncode
+  jdk17-openjdk python openssl unzip zip nodejs npm
 archlinux-java set java-17-openjdk
+
+# jsign (Authenticode for .exe and .ps1, as in docs/windows.md), checked against a pinned SHA-256.
+curl -fsSLo /usr/local/lib/jsign.jar https://repo1.maven.org/maven2/net/jsign/jsign/7.1/jsign-7.1.jar
+echo "cfb48b07fdd2ee199bfc9e71d8dccdde67a799c4793602e446c7a101be62b3c4  /usr/local/lib/jsign.jar" | sha256sum -c --quiet
+printf '#!/bin/sh\nexec java -jar /usr/local/lib/jsign.jar "$@"\n' > /usr/local/bin/jsign && chmod 755 /usr/local/bin/jsign
 
 id builder >/dev/null 2>&1 || useradd -m builder
 chown -R builder: "$PWD"

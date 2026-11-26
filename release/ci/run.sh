@@ -18,19 +18,13 @@ REPO=${GITHUB_REPOSITORY:-ShaddickDev/thurea}
 
 if [ "$MODE" = test ]; then
   echo "== Test build of $VER with throwaway keys (nothing is published)"
-  unset AMO_JWT_ISSUER AMO_JWT_SECRET
+  unset AMO_JWT_ISSUER AMO_JWT_SECRET THUREA_SIGN_CMD
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$K/release-key.pem" 2>/dev/null
   openssl pkey -in "$K/release-key.pem" -pubout -out "$R/release/release-key.pub.pem"
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$K/extension-key.pem" 2>/dev/null
   openssl rand -hex 24 > "$K/android-keystore-pass"
   keytool -genkeypair -noprompt -keystore "$K/android-release.jks" -storetype PKCS12 \
     -storepass:file "$K/android-keystore-pass" -alias thurea -keyalg RSA -keysize 2048 -validity 2 -dname CN=thurea-ci-test
-  # A self-made code-signing certificate, so the Windows signing step runs too.
-  openssl rand -hex 24 > "$K/windows-signing-pass"
-  openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=Thurea CI test" -addext extendedKeyUsage=codeSigning \
-    -keyout "$K/w.key" -out "$K/w.crt" 2>/dev/null
-  openssl pkcs12 -export -inkey "$K/w.key" -in "$K/w.crt" -out "$K/windows-signing.pfx" -passout "file:$K/windows-signing-pass"
-  export THUREA_SIGN_CMD="$R/release/ci/sign-windows.sh"
   "$R/release/build.sh" "$VER"
   D=$R/dist
   python3 -I "$R/release/check-public.py" --assets "$D"/thurea-*.{crx,xpi,zst,deb,rpm,zip,apk}
