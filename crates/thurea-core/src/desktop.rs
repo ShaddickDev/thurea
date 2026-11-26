@@ -25,6 +25,21 @@ pub const PROGRAMS: &[(&str, &[&str])] = &[
     ("Twitch", &["twitch"]),
 ];
 
+/// Anti-cheat and game-protection components Thurea never closes, whatever a rule says. Closing
+/// the game itself is fine (a parent can limit or block it); killing its anti-cheat out from under
+/// it is not: that gets accounts flagged and can leave the anti-cheat's driver in a bad state.
+/// Riot Vanguard, Easy Anti-Cheat, BattlEye, FACEIT, ESEA, nProtect GameGuard, XIGNCODE, Ricochet.
+pub const NEVER_CLOSE: &[&str] = &[
+    "vgc", "vgtray", "vgk", "easyanticheat", "easyanticheat_eos", "easyanticheat_eos_setup", "eac_launcher",
+    "beservice", "beservice_x64", "battleye", "faceit", "faceitservice", "faceitclient", "esea", "eseaclient",
+    "gamemon", "gamemon64", "gameguard", "xigncode", "xxd-0.xem", "randgrid",
+];
+
+/// True for a program Thurea must leave running (see [`NEVER_CLOSE`]).
+pub fn never_close(program: &str) -> bool {
+    NEVER_CLOSE.contains(&normalize(program).as_str())
+}
+
 /// The key the session's own time is counted under (in [`Used`]).
 pub const SESSION: &str = "session";
 
@@ -95,6 +110,7 @@ pub fn desktop_plan(policy: &crate::Policy, device: &str, user: &str, running: &
         }
         screen = Some(summary);
     }
+    close.retain(|(p, _)| !never_close(p));
     DesktopPlan {
         child: Some(child),
         blocked_sites: rules.blocked_sites(clock.map_or_else(crate::now, |c| c.now)),
@@ -190,6 +206,23 @@ mod tests {
     }
     fn clock(minute: u16) -> Clock {
         Clock { now: 1_000_000, day: "2026-11-25".into(), minute }
+    }
+
+    #[test]
+    fn anti_cheat_is_never_closed() {
+        let mut p = fam();
+        let rules = p.family.children.entry("Sam".into()).or_default();
+        rules.screen.limits.insert("vgc".into(), 0);
+        rules.screen.limits.insert("valorant".into(), 0);
+        rules.screen.limits.insert("easyanticheat_eos".into(), 0);
+        let mut used = Used::new();
+        used.insert("vgc".into(), 30);
+        used.insert("valorant".into(), 30);
+        let running: Vec<String> = ["C:\\Program Files\\Riot Vanguard\\vgc.exe", "VALORANT.exe", "EasyAntiCheat_EOS.exe"].iter().map(|s| s.to_string()).collect();
+        let plan = desktop_plan(&p, "pc", "sam", &running, &used, Some(&clock(600)), 0);
+        let closed: Vec<&str> = plan.close.iter().map(|(p, _)| p.as_str()).collect();
+        assert!(!closed.iter().any(|p| never_close(p)), "closed an anti-cheat component: {closed:?}");
+        assert!(never_close("BEService_x64.exe") && !never_close("Discord.exe"));
     }
 
     #[test]

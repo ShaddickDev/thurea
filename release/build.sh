@@ -191,11 +191,35 @@ cp "$R/policy/verses.json" "$W/data/verses.json"
 # The Rust agent for Windows: the tray runs it for "Keep my phone" (setup without a reset).
 ( cd "$R" && PATH="$HOME/.cargo/bin:$PATH" cargo build --release -p thurea-agent --target x86_64-pc-windows-gnu ) >> "$B/rust.log" 2>&1 || { tail -20 "$B/rust.log"; echo "Windows agent build failed"; exit 1; }
 cp "$R/target/x86_64-pc-windows-gnu/release/thurea.exe" "$W/thurea.exe"
+# The tray app, built here so the release can ship it signed. Without mcs (mono), Thurea.ps1
+# compiles it on each PC at install, and that copy is unsigned (Smart App Control may block it).
+if command -v mcs >/dev/null; then
+  mcs -nologo -target:winexe -optimize+ -out:"$W/ThureaTray.exe" -r:System.Windows.Forms.dll -r:System.Drawing.dll \
+      -r:System.Web.Extensions.dll -r:System.Core.dll "$W"/tray/*.cs >> "$B/tray.log" 2>&1 || { cat "$B/tray.log"; echo "tray app build failed"; exit 1; }
+else
+  echo "   (no mcs: ThureaTray.exe will be compiled on each PC, unsigned)"
+fi
 cp "$R/CREDITS.md" "$W/CREDITS.md"
 cp "$C/thurea.crx" "$C/updates.xml" "$W/web/"
 cp "$D/thurea-android.apk" "$W/android/Thurea.apk"
 echo "$VER" > "$W/VERSION"
 find "$W" \( -name "*.ps1" -o -name "*.cs" -o -name "*.cmd" -o -name "*.md" \) -print0 | xargs -0 sed -i "s/\r\?$/\r/"
+# Authenticode: thurea.exe, ThureaTray.exe and Thurea.ps1 (after the CRLF pass: a signed script
+# must not change afterwards). THUREA_SIGN_CMD signs one file in place, e.g. with jsign and a
+# hardware token or Azure Trusted Signing (see docs/windows.md, "Code signing"). Unsigned releases
+# still work, but Smart App Control, SmartScreen and Defender treat them with suspicion; set
+# THUREA_REQUIRE_SIGNED=1 for a public release so an unsigned build fails instead.
+WIN_SIGNED=("$W/thurea.exe" "$W/Thurea.ps1"); [ -f "$W/ThureaTray.exe" ] && WIN_SIGNED+=("$W/ThureaTray.exe")
+if [ -n "${THUREA_SIGN_CMD:-}" ]; then
+  for f in "${WIN_SIGNED[@]}"; do
+    bash -c "$THUREA_SIGN_CMD \"\$1\"" sign "$f" >> "$B/sign.log" 2>&1 || { cat "$B/sign.log"; echo "signing $f failed"; exit 1; }
+  done
+  echo "   signed: ${WIN_SIGNED[*]##*/}"
+elif [ "${THUREA_REQUIRE_SIGNED:-0}" = 1 ]; then
+  echo "THUREA_REQUIRE_SIGNED=1 but THUREA_SIGN_CMD isn't set: refusing to build an unsigned Windows release"; exit 1
+else
+  echo "   WARNING: Windows files are NOT code-signed (set THUREA_SIGN_CMD)"
+fi
 ( cd "$B/windows" && python3 - <<'PY'
 import os, zipfile
 with zipfile.ZipFile("../../../dist/thurea-windows.zip", "w", zipfile.ZIP_DEFLATED) as z:

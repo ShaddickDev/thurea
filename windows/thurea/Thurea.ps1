@@ -127,7 +127,32 @@ function Get-Reg([string]$key, [string]$name) {
 # Chromium accepts off-store force-installed extensions on Windows only when the machine reports
 # a device-management enrollment (IsDeviceRegisteredWithManagement). These entries are what an
 # MDM enrollment leaves behind; there is no server and nothing is sent anywhere.
+# A PC that is really enrolled (Intune or another MDM, "Access work or school") already counts as
+# managed, so Thurea leaves the enrollment keys alone there: writing a second, empty enrollment
+# next to a real one could confuse the real MDM client.
+function Get-RealEnrollment {
+    foreach ($k in Get-ChildItem 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Enrollments' -ErrorAction SilentlyContinue) {
+        if ($k.PSChildName -eq $Enroll -or $k.PSChildName -notmatch '^\{?[0-9A-Fa-f-]{36}\}?$') { continue }
+        $p = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
+        if ($p -and ($p.PSObject.Properties.Name -contains 'ProviderID') -and "$($p.ProviderID)" -and
+            ($p.PSObject.Properties.Name -contains 'EnrollmentState') -and $p.EnrollmentState -eq 1) { return "$($p.ProviderID)" }
+    }
+    return $null
+}
+function Test-Managed {
+    if (Get-RealEnrollment) { return $true }
+    return (Get-Reg "SOFTWARE\Microsoft\Enrollments\$Enroll" 'EnrollmentState') -eq 1
+}
 function Set-Managed {
+    $real = Get-RealEnrollment
+    if ($real) {
+        if (Test-Path "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Enrollments\$Enroll") {
+            Remove-Item "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Enrollments\$Enroll" -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Provisioning\OMADM\Accounts\$Enroll" -Recurse -Force -ErrorAction SilentlyContinue
+            Log "This PC is enrolled with $($real): Thurea's own managed marker removed (not needed)"
+        }
+        return
+    }
     $c = $false
     $c = (Set-Reg "SOFTWARE\Microsoft\Enrollments\$Enroll" 'EnrollmentState' 1 'DWord') -or $c
     $c = (Set-Reg "SOFTWARE\Microsoft\Enrollments\$Enroll" 'EnrollmentType' 0 'DWord') -or $c
@@ -315,7 +340,7 @@ function Write-Status {
             (@((Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4).ServerAddresses) -join ',') -ne ($FamilyV4 -join ',') })
     $checks.firewall = @(Get-NetFirewallRule -Group 'Thurea' -ErrorAction SilentlyContinue | Where-Object Enabled -eq 'True').Count -ge 3
     $checks.browsers = -not ($Chromium.Values | Where-Object { (Get-Reg $_ 'DnsOverHttpsMode') -ne 'secure' })
-    $checks.managed = (Get-Reg "SOFTWARE\Microsoft\Enrollments\$Enroll" 'EnrollmentState') -eq 1
+    $checks.managed = Test-Managed
     $checks.extensionServer = Test-Server
     if (Test-Path (Join-Path $State 'remove-edge')) { $checks.edgeRemoved = -not (Test-Path "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe") }
     $checks.tasks = Test-Tasks
@@ -419,10 +444,14 @@ function Invoke-Update {
     Log "update: Thurea $($m.version) installed (exit $LASTEXITCODE)"
 }
 
-# Tray app, compiled here with the C# compiler that ships with Windows (.NET Framework 4.8).
+# Tray app. Releases ship ThureaTray.exe prebuilt and code-signed (release/build.sh): an exe
+# compiled on the PC is unsigned, which Smart App Control and Defender SmartScreen may block. Only
+# when no signed copy is shipped is it compiled here with the C# compiler that ships with Windows
+# (.NET Framework 4.8).
 function Build-Tray {
     $src = @(Get-ChildItem -LiteralPath (Join-Path $Home_ 'tray') -Filter '*.cs' -ErrorAction SilentlyContinue | ForEach-Object FullName)
     $exe = Join-Path $Home_ 'ThureaTray.exe'
+    if ((Test-Path -LiteralPath $exe) -and (Get-AuthenticodeSignature -LiteralPath $exe).Status -eq 'Valid') { return }
     if (-not $src) { return }
     $csc = "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
     $out = & $csc /nologo /target:winexe /optimize+ "/out:$exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.Core.dll @src 2>&1

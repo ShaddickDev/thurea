@@ -201,8 +201,14 @@ fn dispatch(args: &[String]) -> Result<String, String> {
         "install" => {
             need_admin()?;
             Config::load()?;
-            let r = platform::apply(&config::load_policy());
-            Ok(format!("{}\n\n{}", platform::install()?, r.render()))
+            // Windows: Thurea.ps1 -Install copies Thurea into place and applies everything itself.
+            #[cfg(windows)]
+            return platform::install().map(|m| format!("{m}\n\n{}", platform::check(&config::load_policy()).render()));
+            #[cfg(not(windows))]
+            {
+                let r = platform::apply(&config::load_policy());
+                Ok(format!("{}\n\n{}", platform::install()?, r.render()))
+            }
         }
         "uninstall" => {
             need_admin()?;
