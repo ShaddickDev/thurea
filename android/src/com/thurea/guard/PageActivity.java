@@ -281,17 +281,24 @@ public class PageActivity extends Activity {
             top.length() == 0 ? "Nothing reported yet today" : top.toString(), null));
         l.addView(Ui.divider(this));
         l.addView(Ui.row(this, "⏳", "Daily limit", daily > 0 ? ScreenTime.duration(daily) + " a day · tap to change" : "Off · tap to set", () -> {
-            String[] labels = { "Off", "30 min", "1 h", "1 h 30", "2 h", "3 h" };
-            int[] mins = { 0, 30, 60, 90, 120, 180 };
-            new AlertDialog.Builder(this).setTitle("Daily limit for " + name).setItems(labels,
-                (d, w) -> famDo(() -> Native.familyScreen(name, "daily", String.valueOf(mins[w]), ""))).show();
+            String[] labels = { "Off", "30 min", "1 h", "1 h 30", "2 h", "2 h 30", "3 h", "4 h", "Other…" };
+            int[] mins = { 0, 30, 60, 90, 120, 150, 180, 240 };
+            new AlertDialog.Builder(this).setTitle("Daily limit for " + name).setItems(labels, (d, w) -> {
+                if (w < mins.length) famDo(() -> Native.familyScreen(name, "daily", String.valueOf(mins[w]), ""));
+                else ask("Minutes a day", "e.g. 75", daily > 0 ? String.valueOf(daily) : "", v -> {
+                    int m; try { m = Integer.parseInt(v.trim()); } catch (NumberFormatException e) { m = -1; }
+                    if (m < 1 || m > 1440) { famNote = "! Enter minutes between 1 and 1440"; render(); return; }
+                    String mv = String.valueOf(m);
+                    famDo(() -> Native.familyScreen(name, "daily", mv, ""));
+                });
+            }).show();
         }));
         org.json.JSONObject limits = screen.optJSONObject("limits");
         long social = limits == null ? 0 : limits.optLong("social");
         l.addView(Ui.divider(this));
         l.addView(Ui.row(this, "💬", "Social media limit", social > 0 ? ScreenTime.duration(social) + " a day (when allowed)" : "Off · tap to set", () -> {
-            String[] labels = { "Off", "15 min", "30 min", "1 h" };
-            int[] mins = { 0, 15, 30, 60 };
+            String[] labels = { "Off", "15 min", "30 min", "45 min", "1 h", "1 h 30" };
+            int[] mins = { 0, 15, 30, 45, 60, 90 };
             new AlertDialog.Builder(this).setTitle("Social media a day").setItems(labels,
                 (d, w) -> famDo(() -> Native.familyScreen(name, "limit", "social", String.valueOf(mins[w])))).show();
         }));
@@ -306,6 +313,20 @@ public class PageActivity extends Activity {
                 else ask("Bedtime", "21:30-06:45", "", v -> famDo(() -> Native.familyScreen(name, "bedtime", v, "")));
             }).show();
         }));
+        // Apps that limits, bedtime and pauses never stop (a school app, the phone).
+        org.json.JSONArray alwaysJson = screen.optJSONArray("always_allowed");
+        List<String> always = new ArrayList<>();
+        for (int i = 0; alwaysJson != null && i < alwaysJson.length(); i++) always.add(alwaysJson.optString(i));
+        l.addView(Ui.divider(this));
+        l.addView(Ui.row(this, "⭐", "Always allowed", always.isEmpty() ? "None · tap to add a school app or the phone" : String.join(", ", always), () -> {
+            String[] items = new String[always.size() + 1];
+            for (int i = 0; i < always.size(); i++) items[i] = "Remove " + always.get(i);
+            items[always.size()] = "Add an app…";
+            new AlertDialog.Builder(this).setTitle("Always allowed for " + name).setItems(items, (d, w) -> {
+                if (w < always.size()) { String a = always.get(w); famDo(() -> Native.familyScreen(name, "always", a, "off")); }
+                else ask("App's package name", "org.school.app", "", v -> { if (!v.isEmpty()) famDo(() -> Native.familyScreen(name, "always", v, "on")); });
+            }).show();
+        }));
         col.addView(l);
         // Right now.
         boolean paused = !screen.isNull("paused_until") && screen.optLong("paused_until") > System.currentTimeMillis() / 1000;
@@ -315,7 +336,9 @@ public class PageActivity extends Activity {
         lp.rightMargin = Ui.dp(this, 8);
         row1.addView(Ui.button(this, paused ? "Resume" : "Pause 1 h", false, Ui.ACCENT,
             () -> famDo(() -> Native.familyScreen(name, "pause", paused ? "0" : "60", ""))), lp);
-        row1.addView(Ui.button(this, "Lock now", false, Ui.ACCENT, () -> famDo(() -> Native.familyScreen(name, "lock", "", ""))), lp);
+        row1.addView(Ui.button(this, "Lock now", false, Ui.ACCENT, () -> new AlertDialog.Builder(this).setTitle("Lock " + name + "'s devices now?")
+            .setMessage("Their phone and their accounts on shared computers lock once. Always-allowed apps still work.")
+            .setPositiveButton("Lock now", (d, w) -> famDo(() -> Native.familyScreen(name, "lock", "", ""))).setNegativeButton("Cancel", null).show()), lp);
         row2.addView(Ui.button(this, "+15", false, Ui.ACCENT, () -> famDo(() -> Native.familyScreen(name, "extra", "15", ScreenTime.today()))), lp);
         row2.addView(Ui.button(this, "+30", false, Ui.ACCENT, () -> famDo(() -> Native.familyScreen(name, "extra", "30", ScreenTime.today()))), lp);
         row2.addView(Ui.button(this, "Code", false, Ui.ACCENT, () -> {

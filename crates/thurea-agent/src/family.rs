@@ -15,7 +15,9 @@ use std::path::PathBuf;
 
 pub const HELP: &str = "\
   thurea family [--json]           Parents, children's devices, their rules, waiting requests
-  thurea control-center            The same in a window: requests, children, devices, relay
+  thurea control-center [--no-browser]
+                                   The same in a window: requests, children, screen time,
+                                   devices, relay (--no-browser: just print its address)
   thurea family create NAME        Start a family with you as a parent (as admin, once)
   thurea family join NAME          Ask the family's parents to make you a parent too
   thurea family child DEVICE NAME  Make a household device (id from `thurea status`) NAME's
@@ -124,12 +126,50 @@ pub fn save_usage(r: &thurea_core::screen::UsageReport) {
     let _ = std::fs::write(usage_path(), serde_json::to_string(&all).unwrap());
 }
 
-/// Today's local date, "YYYY-MM-DD" (the OS knows the time zone).
+/// Today's local date, "YYYY-MM-DD" (the OS knows the time zone). Asked often (the control
+/// center's every refresh), so it's kept for a few seconds.
 pub fn local_day() -> String {
-    #[cfg(windows)]
-    let out = std::process::Command::new("powershell").args(["-NoProfile", "-Command", "Get-Date -Format yyyy-MM-dd"]).output();
-    #[cfg(not(windows))]
-    let out = std::process::Command::new("date").arg("+%F").output();
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, String)>> = std::sync::Mutex::new(None);
+    if let Some(d) = CACHE.lock().ok().and_then(|c| c.as_ref().filter(|(at, _)| at.elapsed().as_secs() < 20).map(|(_, d)| d.clone())) {
+        return d;
+    }
+    let d = os_local_day();
+    if d.len() == 10 {
+        if let Ok(mut c) = CACHE.lock() {
+            *c = Some((std::time::Instant::now(), d.clone()));
+        }
+    }
+    d
+}
+
+#[cfg(windows)]
+fn os_local_day() -> String {
+    // Straight from the OS: no PowerShell (slow, and a console window from a windowless process).
+    #[repr(C)]
+    #[derive(Default)]
+    struct SystemTime {
+        year: u16,
+        month: u16,
+        day_of_week: u16,
+        day: u16,
+        hour: u16,
+        minute: u16,
+        second: u16,
+        ms: u16,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetLocalTime(t: *mut SystemTime);
+    }
+    let mut t = SystemTime::default();
+    // SAFETY: GetLocalTime only fills in the struct it's given.
+    unsafe { GetLocalTime(&mut t) };
+    format!("{:04}-{:02}-{:02}", t.year, t.month, t.day)
+}
+
+#[cfg(not(windows))]
+fn os_local_day() -> String {
+    let out = std::process::Command::new("date").arg("+%F").stdin(std::process::Stdio::null()).output();
     out.ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|d| d.len() == 10).unwrap_or_default()
 }
 
@@ -144,9 +184,32 @@ pub fn screen(child: &str, what: &str, a: &str, b: &str) -> Result<String, Strin
     })
 }
 
-/// The policy in force here: the service's readable copy, or (as admin) the config.
+/// The policy in force here: the service's readable copy, or (as admin) the config — or this
+/// parent's own last change, while the service hasn't taken it in yet.
 pub fn current_policy() -> Policy {
-    Policy::load(&config::public_policy_path()).ok().filter(|p| !config::policy_path().exists() || Policy::load(&config::policy_path()).map_or(true, |c| !thurea_core::mesh::newer(&c, p))).unwrap_or_else(config::load_policy)
+    let base = Policy::load(&config::public_policy_path()).ok().filter(|p| !config::policy_path().exists() || Policy::load(&config::policy_path()).map_or(true, |c| !thurea_core::mesh::newer(&c, p))).unwrap_or_else(config::load_policy);
+    match pending() {
+        Some(p) if thurea_core::mesh::newer(&p, &base) && base.accepts(&p).is_ok() => p,
+        _ => base,
+    }
+}
+
+/// This parent's last change, handed to the service. Two changes in a row (two switches in the
+/// control center) must build on each other, not both on the policy the service still shows,
+/// or the second would carry the same version and be dropped; and the page shows a change at
+/// once. Only for a few minutes: by then the service has taken it in (or turned it down).
+fn pending_path() -> PathBuf {
+    key_path().with_file_name("pending-policy.json")
+}
+
+fn pending() -> Option<Policy> {
+    let path = pending_path();
+    let age = std::fs::metadata(&path).ok()?.modified().ok()?.elapsed().ok()?;
+    if age > std::time::Duration::from_secs(5 * 60) {
+        let _ = std::fs::remove_file(&path);
+        return None;
+    }
+    Policy::load(&path).ok()
 }
 
 /// Hands a signed policy to the service (and, as admin, saves it straight away).
@@ -154,7 +217,13 @@ fn submit(p: &Policy) -> Result<(), String> {
     if crate::platform::is_admin() && config::config_dir().exists() {
         p.save(&config::policy_path()).map_err(|e| e.to_string())?;
     }
-    write_submission(&format!("{}.policy.json", crypto::new_device_id()), &p.to_json())
+    write_submission(&format!("{}.policy.json", crypto::new_device_id()), &p.to_json())?;
+    if parent_key().is_some() {
+        let path = pending_path();
+        let _ = std::fs::remove_file(&path); // may be root's, from an earlier sudo
+        let _ = std::fs::write(&path, p.to_json());
+    }
+    Ok(())
 }
 
 fn write_submission(name: &str, body: &str) -> Result<(), String> {
@@ -301,6 +370,8 @@ pub fn json() -> Value {
         "has_family": !f.parents.is_empty(),
         "parent": me.as_ref().is_some_and(|k| f.is_parent(k)),
         "my_code": me.as_ref().map(|k| family::match_code(k)),
+        "my_name": me.as_ref().and_then(|k| f.parents.iter().find(|x| &x.key == k).map(|x| x.name.clone())),
+        "day": today,
         "parents": f.parents.iter().map(|x| x.name.clone()).collect::<Vec<_>>(),
         "devices": f.devices,
         "peers": state["peers"],
@@ -315,6 +386,17 @@ pub fn json() -> Value {
 }
 
 pub fn run(args: &[String]) -> Result<String, String> {
+    // `--out FILE`: also write the result there as {"ok", "msg"} (the control center runs some
+    // commands as admin through UAC, which can't hand back what they print).
+    if let Some(i) = args.iter().position(|a| a == "--out") {
+        let path = args.get(i + 1).cloned().ok_or("usage: --out FILE")?;
+        let mut rest = args.to_vec();
+        rest.drain(i..=i + 1);
+        let r = run(&rest);
+        let msg = match &r { Ok(m) => m.clone(), Err(e) => e.clone() };
+        let _ = std::fs::write(&path, json!({ "ok": r.is_ok(), "msg": msg }).to_string());
+        return r;
+    }
     let sub = args.get(1).map(String::as_str).filter(|s| !s.starts_with("--")).unwrap_or("status");
     let a = |i: usize, what: &str| args.get(i).cloned().ok_or(format!("usage: thurea family {sub} {what}"));
     match sub {

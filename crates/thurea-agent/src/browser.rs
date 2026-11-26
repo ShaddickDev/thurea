@@ -69,7 +69,7 @@ fn me() -> PathBuf {
 }
 
 /// Starts a program that outlives this helper (the browser ends the helper once it has replied).
-fn spawn(program: impl AsRef<std::ffi::OsStr>, args: &[&str]) -> std::io::Result<()> {
+pub(crate) fn spawn(program: impl AsRef<std::ffi::OsStr>, args: &[&str]) -> std::io::Result<()> {
     let mut c = Command::new(program);
     c.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(unix)]
