@@ -6,8 +6,8 @@ Release:        1
 Summary:        Family protection: harmful-site and ad blocker, managed by the system
 License:        MIT
 URL:            https://github.com/ShaddickDev/thurea
-Requires:       systemd, e2fsprogs, python3, nftables, openssl
-Recommends:     NetworkManager, android-tools
+Requires:       systemd, e2fsprogs, python3, nftables, openssl, curl
+Recommends:     NetworkManager, android-tools, ffmpeg-free
 AutoReqProv:    no
 %global debug_package %{nil}
 %global __strip /bin/true

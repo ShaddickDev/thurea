@@ -192,6 +192,8 @@ const ICONS = {
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   arrow: '<path d="M9 6l6 6-6 6"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+  folder: '<path d="M3 6h6l2 2h10v11H3V6z"/>',
 };
 function icon(name) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -245,6 +247,8 @@ async function load(force) {
     const s = JSON.parse(text);
     const key = JSON.stringify({ ...s, now: 0 });
     state = s;
+    // The Downloads page keeps itself up to date (and what was pasted there stays).
+    if (!force && route() === "downloads") return;
     // Never redraw under the parent's hands: while they type, pick or read a dialog.
     if (!force && (editing() || document.getElementById("dlg").open)) return;
     if (force || key !== lastJson || Date.now() - renderedAt > 60000) { lastJson = key; render(); }
@@ -347,13 +351,20 @@ function render() {
   const n = (s.inbox || []).length;
   document.title = (n && s.parent ? `(${n}) ` : "") + "Thurea · Family";
 
-  if (!s.service || !s.has_family || !s.parent) { nav.replaceChildren(); app.replaceChildren(setupPage(s)); return; }
+  // Downloads work for everyone, with or without a family.
+  const setup = !s.service || !s.has_family || !s.parent;
+  if (route() === "downloads") {
+    nav.replaceChildren(...[["overview", setup ? "Family" : "Overview"], ["downloads", "Downloads"]].map(([id, label]) => h("a", { href: "#/" + id, "aria-current": id === "downloads" ? "page" : null }, label)));
+    app.replaceChildren(...downloadsPage());
+    return;
+  }
+  if (setup) { nav.replaceChildren(h("a", { href: "#/overview", "aria-current": "page" }, "Family"), h("a", { href: "#/downloads" }, "Downloads")); app.replaceChildren(setupPage(s)); return; }
 
   const kids = Object.keys(s.children || {});
   let r = route();
   if (r.startsWith("child/") && !kids.includes(r.slice(6))) r = "overview";
   const tabs = [["overview", "Overview", n ? h("span.badge", { "aria-label": `${n} waiting` }, n) : null],
-    ...kids.map(k => ["child/" + k, k, null]), ["devices", "Devices", null], ["settings", "Settings", null]];
+    ...kids.map(k => ["child/" + k, k, null]), ["devices", "Devices", null], ["settings", "Settings", null], ["downloads", "Downloads", null]];
   nav.replaceChildren(...tabs.map(([id, label, extra]) => h("a", { href: "#/" + id, "aria-current": r === id ? "page" : null }, label, extra)));
 
   const page = r === "devices" ? devicesPage(s) : r === "settings" ? settingsPage(s) : r.startsWith("child/") ? childPage(s, r.slice(6)) : overviewPage(s);
@@ -630,6 +641,86 @@ function settingsPage(s) {
     h("code", "thurea family screen NAME daily 90"), " or ", h("code", "thurea family approve ID 30"), "."),
     h("p.muted", { style: "margin:8px 0 0" }, `Family policy version ${s.version || 0}.`)));
   return out;
+}
+
+// ── Downloads: the same list as the browser extension's (Thurea → Download in any browser) ──
+let dlJobs = [], dlFolder = "", dlTimer = 0;
+async function video(body, b) {
+  if (b) { b.disabled = true; b.classList.add("busy"); }
+  let v;
+  try {
+    const r = await fetch("/api/video?t=" + T, { method: "POST", headers: { "Content-Type": "application/json", "X-Thurea": "1" }, body: JSON.stringify(body) });
+    v = await r.json();
+  } catch { v = { error: "Couldn't reach Thurea on this computer. Open Thurea again." }; }
+  if (b) { b.disabled = false; b.classList.remove("busy"); }
+  if (v.error) toast(v.error, true);
+  return v;
+}
+async function loadDownloads() {
+  try {
+    const r = await fetch("/api/downloads?t=" + T, { cache: "no-store" });
+    const v = await r.json();
+    dlJobs = v.jobs || []; dlFolder = v.folder || "";
+  } catch { return; }
+  const box = document.getElementById("dl-jobs");
+  if (box) box.replaceChildren(...jobRows());
+  const f = document.getElementById("dl-folder");
+  if (f) f.textContent = dlFolder;
+}
+const RUNNING = (j) => !["done", "failed", "cancelled"].includes(j.state);
+function jobRows() {
+  if (!dlJobs.length) return [h("div.pad.muted", "No downloads yet. Start one here, or with Thurea → Download in your browser.")];
+  return dlJobs.map(j => {
+    const q = j.quality === "audio" ? "Audio" : j.quality === "best" ? "Best" : j.quality + "p";
+    const name = j.title || j.url;
+    let sub;
+    if (j.state === "done") sub = "Saved: " + (j.name || String(j.file || "").split(/[\\/]/).pop());
+    else if (j.state === "failed") sub = "Failed: " + (j.error || "unknown error");
+    else if (j.state === "cancelled") sub = "Cancelled";
+    else if (j.state === "converting") sub = "Joining video and sound…";
+    else if (j.state === "preparing") sub = "Getting the downloader ready (the first time takes a minute)…";
+    else if (j.state === "queued") sub = "Starting…";
+    else sub = `${(j.percent || 0).toFixed(1)}%` + (j.part > 1 && !j.playlist ? " (sound)" : "") + (j.speed ? ` · ${j.speed}` : "") + (j.eta ? ` · ${j.eta} left` : "") + (j.item ? ` · item ${j.item}` : "");
+    const acts = [];
+    if (RUNNING(j)) acts.push(btn("Cancel", { cls: "danger" }, b => video({ type: "cancel", job: j.id }, b).then(loadDownloads)));
+    if (j.state === "done") acts.push(btn("Show", { icon: "folder" }, b => video({ type: "reveal", job: j.id }, b)));
+    if (!RUNNING(j)) acts.push(btn("Remove", { aria: "Remove from the list" }, b => video({ type: "forget", job: j.id }, b).then(loadDownloads)));
+    const r = row(j.state === "failed" || j.state === "cancelled" ? "alert" : j.state === "done" ? "check" : "download",
+      h("span", name, " ", h("span.chip", q), j.from === "browser" ? h("span.chip", "from the browser") : null), sub, acts,
+      { tone: j.state === "done" ? "good" : j.state === "failed" ? "warn" : "accent" });
+    if (RUNNING(j)) r.querySelector(".main").append(h("div", { style: "height:4px;border-radius:2px;background:rgba(127,127,127,.25);margin-top:6px" },
+      h("div", { style: `height:100%;border-radius:2px;background:currentColor;opacity:.6;width:${Math.min(100, j.percent || 0)}%` })));
+    return r;
+  });
+}
+function downloadsPage() {
+  const url = h("input", { type: "url", placeholder: "Paste a video's address (YouTube, Vimeo, almost any site)", "aria-label": "Video address", style: "flex:1;min-width:0" });
+  const picks = h("div", { style: "display:flex;flex-wrap:wrap;gap:8px;margin-top:12px" });
+  const check = btn("Check", { cls: "primary", icon: "download" }, async b => {
+    const u = url.value.trim();
+    if (!/^https?:\/\//.test(u)) { toast("Paste the address of the page with the video", true); return; }
+    picks.replaceChildren(h("span.muted", "Checking what this video offers…"));
+    const info = await video({ type: "formats", url: u }, b);
+    if (info.error) { picks.replaceChildren(h("span.muted", info.error)); return; }
+    const title = info.title || u;
+    const start = (quality) => async (b2) => {
+      const v = await video({ type: "download", url: u, quality, title }, b2);
+      if (v.job) { toast("Downloading: " + title); url.value = ""; picks.replaceChildren(); loadDownloads(); }
+    };
+    picks.replaceChildren(h("div", { style: "width:100%;font-weight:600" }, title),
+      ...(info.formats || []).map((f, i) => btn(f.label, { cls: i === 0 ? "primary" : "" }, start(String(f.height)))),
+      btn("Audio (MP3)", start("audio")));
+  });
+  url.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); check.click(); } });
+  clearInterval(dlTimer);
+  dlTimer = setInterval(() => { if (route() === "downloads") loadDownloads(); else clearInterval(dlTimer); }, 1500);
+  setTimeout(loadDownloads, 0);
+  return [h("h2", "Download a video"),
+    h("div.card.pad", h("div.field", { style: "display:flex;gap:8px" }, url, check), picks,
+      h("p.muted", { style: "margin:12px 0 0" }, "Every resolution the video comes in, up to 8K, or just the sound. Saved in ", h("b", { id: "dl-folder" }, dlFolder || "your Downloads folder"), ". Sites Thurea blocks can't be downloaded from.")),
+    h("h2", "Downloads"),
+    h("div.card.list", { id: "dl-jobs" }, jobRows()),
+    h("p.muted", { style: "margin:12px 6px 0" }, "The same list as Thurea's Download menu in Chrome, Edge, Brave, Firefox and the rest: start a download in one and follow it in the other.")];
 }
 
 load(true);

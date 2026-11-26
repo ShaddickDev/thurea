@@ -6,7 +6,7 @@
 //! or the Windows tray.
 //!
 //! Requests (JSON): {"type":"home"} · {"type":"prefs","key":"verses"|"animation","on":bool} ·
-//! {"type":"open","what":"main"|"phone"|"reset"|"family"|"reapply"}.
+//! {"type":"open","what":"main"|"phone"|"reset"|"family"|"reapply"|"downloads"}.
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -99,6 +99,10 @@ fn open(what: &str) -> Value {
             Err(e) => fail(format!("Couldn't open the family center: {e}")),
         },
         "reapply" => reapply(),
+        "downloads" => match spawn(me(), &["control-center", "--page", "downloads"]) {
+            Ok(()) => ok(),
+            Err(e) => fail(format!("Couldn't open Thurea's downloads: {e}")),
+        },
         _ => open_tray(what),
     }
 }

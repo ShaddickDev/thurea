@@ -8,7 +8,7 @@ device in the household, and is hard to switch off. One project, one version, on
 | **Windows** | Family DNS (Cloudflare for Families) on every network, other DNS servers and public DNS-over-HTTPS blocked in the firewall, every Chromium browser locked (Thurea extension force-installed, SafeSearch, no incognito/guest), Firefox policies, Tor/Mullvad/Opera blocked, can't be uninstalled (tasks restore each other, no Uninstall in Settings), tray app (status, verse of the day, phone setup by QR) | `thurea-windows.zip` → `Thurea\Install Thurea.cmd`, or the Thurea Windows 11 ISO (`windows/`) |
 | **Linux** (Arch / Omarchy, Debian / Ubuntu, Fedora) | The same, plus a hosts block of 64,000+ domains, nftables DNS lockdown, and a package that can't be removed (pacman hook / apt `Protected` / dnf protected packages). **Omarchy first:** Thurea installs itself into the Omarchy bar (status, verse of the day, family, phone setup by QR); other desktops get `thurea-tray` | `thurea-linux.pkg.tar.zst` · `thurea-linux.deb` · `thurea-linux.rpm` |
 | **Android** | Device owner: family DNS, private DNS/VPN checks, locked apps, YouTube ad blocker, household mesh; set up with one QR scan (`thurea setup-phone`) | `thurea-android.apk` |
-| **Browser extension** | Ads, trackers, pop-unders, cookie banners, YouTube extras; adult sites blocked when the `pornBlock` policy is set (the desktop platforms set it) | inside every desktop package |
+| **Browser extension** | Ads, trackers, pop-unders, cookie banners, YouTube ads and SponsorBlock, video downloads at every resolution (through Thurea's downloader, shared with its Downloads page); adult sites blocked when the `pornBlock` policy is set (the desktop platforms set it). Force-installed in every Chromium browser (Chrome, Edge, Brave, Vivaldi…) and every Firefox-family one (Firefox, LibreWolf, Waterfox, Zen, Floorp), snap and Flatpak copies included | inside every desktop package; `thurea-extension.crx`, `thurea-extension-firefox.xpi` |
 
 ## Install
 
@@ -124,6 +124,12 @@ then marks each child's device from the household's device list.
   (`~/.config/thurea/parent.key`, `%APPDATA%\Thurea\parent.key`); Thurea's service only takes a
   change a parent signed, so a child on the same computer can't make one. Starting a family on a
   computer asks for admin once.
+* **Video downloads (every desktop, no admin):** Thurea → Download in any browser, the
+  Downloads page of Thurea's window, or `thurea download URL [--quality 1080]` save a video from
+  YouTube and most other sites at any resolution it comes in (up to 8K), or just the sound, into
+  your Downloads folder. All three show the same list with live progress. Thurea keeps its own
+  up-to-date yt-dlp (and ffmpeg if the computer has none) per user, checked against the
+  published checksums; sites Thurea blocks can't be downloaded from.
 * **More than one parent:** on another phone or computer, "I'm a parent too" (`thurea family join
   NAME`) asks the family; an existing parent approves it after checking the 6-digit code both
   devices show.

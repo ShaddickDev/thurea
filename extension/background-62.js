@@ -13,7 +13,8 @@ chrome.storage.local.set({ bgStarted: Date.now() });
 importScripts("userscripts-lib.js", "userscripts-bg.js", "filterlists.js", "vault.js", "randomgroup.js", "omarchy.js", "vpnguard.js", "extras-bg.js", "mixer-bg.js", "pornblock-bg.js", "family.js");
 
 // No number on the toolbar icon (the blocked count is shown in the popup).
-chrome.declarativeNetRequest.setExtensionActionOptions({ displayActionCountAsBadgeText: false }).catch(() => {});
+// (Firefox has no setExtensionActionOptions and shows no count unless asked.)
+chrome.declarativeNetRequest.setExtensionActionOptions?.({ displayActionCountAsBadgeText: false })?.catch(() => {});
 
 const ALLOW_BASE = 10000; // dynamic allow-rule ids start here
 

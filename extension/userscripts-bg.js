@@ -15,6 +15,9 @@ const BUNDLED_SCRIPTS = [
     replaces: "Twitch Auto Channel Points" }
 ];
 
+// Firefox (moz-extension://) instead of Chromium. Also used by vpnguard.js.
+const IS_FIREFOX = chrome.runtime.getURL("").startsWith("moz-extension:");
+
 function userScriptsAvailable() {
   try { chrome.userScripts.getScripts(); return true; } catch { return false; }
 }

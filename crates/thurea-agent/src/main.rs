@@ -6,6 +6,7 @@ mod browser;
 mod config;
 mod daemon;
 mod control;
+mod downloads;
 mod family;
 mod platform;
 mod prefs;
@@ -63,6 +64,13 @@ Tray apps (no admin needed):
   thurea prefs [--json]            The tray apps' settings for this user
   thurea prefs set KEY on|off      verses (verse of the day), animation (logo on open)
   thurea desktop-status            This computer's protection, as JSON (for the tray apps)
+
+Videos (no admin needed):
+  thurea download URL [--quality best|audio|2160|1080|…] [--playlist] [--list]
+                                   Save a video from almost any site at any resolution it offers
+                                   (--list: show them). Runs in the background, in the same list as
+                                   the browser extension's downloads and Thurea's Downloads page
+  thurea downloads                 The downloads and their progress
 
 Other:
   thurea apply                     Enforce the policy once and show the result
@@ -227,6 +235,10 @@ fn dispatch(args: &[String]) -> Result<String, String> {
         // Chrome starts this as the browser extension's helper; nothing else may print.
         "family-host" => family::host(),
         "control-center" => control::run(args),
+        // The extension's video-download helper (com.thurea.ytdlp); same rule: only replies.
+        "video-host" => downloads::host(),
+        "video-worker" => downloads::worker(arg.as_deref().unwrap_or("")),
+        "download" | "downloads" => downloads::cli(args),
         "relay" => {
             let port: u16 = flag(args, "--port").map(|p| p.parse().map_err(|_| "port must be a number")).transpose()?.unwrap_or(thurea_core::relay::PORT);
             let stop = std::sync::atomic::AtomicBool::new(false);

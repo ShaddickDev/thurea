@@ -12,11 +12,21 @@
 
   // ── 1. Strip ad data from player responses (uBlock's "json-prune") ──
   const AD_KEYS = ["adPlacements", "adSlots", "playerAds", "adBreakHeartbeatParams"];
+  // A Shorts feed entry that is an ad (the "Sponsored" Shorts between videos).
+  const isShortsAd = e => !!(e && e.command && e.command.reelWatchEndpoint &&
+    e.command.reelWatchEndpoint.adClientParams && e.command.reelWatchEndpoint.adClientParams.isAd);
+  const prune = target => {
+    if (!target || typeof target !== "object") return;
+    for (const k of AD_KEYS) if (k in target) delete target[k];
+    if (Array.isArray(target.entries) && target.entries.some(isShortsAd)) target.entries = target.entries.filter(e => !isShortsAd(e));
+  };
   const stripAds = obj => {
     if (!obj || typeof obj !== "object" || off()) return obj;
-    for (const target of [obj, obj.playerResponse, obj.response, obj[1] && obj[1].playerResponse]) {
-      if (!target || typeof target !== "object") continue;
-      for (const k of AD_KEYS) if (k in target) delete target[k];
+    // Page loads and in-app navigation answer with an object, or an array of parts
+    // ([{page}, {playerResponse}, …]); the player data is in one of them.
+    for (const part of Array.isArray(obj) ? obj : [obj]) {
+      if (!part || typeof part !== "object") continue;
+      for (const target of [part, part.playerResponse, part.response, part.response && part.response.playerResponse]) prune(target);
     }
     return obj;
   };

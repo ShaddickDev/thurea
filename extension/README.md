@@ -1,28 +1,40 @@
-# Thurea – Ad Blocker & Video Downloader
+# Thurea browser extension
 
-## Install (Chrome / Edge / Brave)
-1. Unzip this folder.
-2. Open `chrome://extensions` and switch on **Developer mode** (top right).
-3. Click **Load unpacked** and select the unzipped `adult-adblock` folder.
-4. Pin the 🛡️ icon from the puzzle-piece menu.
+Ad and tracker blocker, YouTube ad blocking and SponsorBlock, pop-under / redirect / click-hijack
+protection, cookie banners, video downloads, and (on Thurea computers) the adult-site block and
+the family's rules for a child's account.
 
-## What it does
-- **Network blocking**: about 50 adult ad networks (TrafficJunky, ExoClick, JuicyAds, TrafficStars, PlugRush, PopAds, HilltopAds, Adsterra and others), plus common third-party ad paths. These are blocked before they load.
-- **Pop-under and tab-under killer**: stops `window.open` popups and fake link clicks the user didn't make. It also blocks ad redirects and closes ad tabs that open in the background.
-- **Click-hijack removal**: deletes invisible full-page overlays that grab your first click.
-- **Cosmetic filtering**: hides banner slots, under-player ads, "sponsored" boxes and native ads.
-- **Popup controls**: a global on/off switch and a per-site pause. The badge shows how many requests were blocked.
+## How it gets installed
 
-## Video downloader
-1. Open a video page and **press play** for a second so the player loads its stream.
-2. Click the 🛡️ icon. Under **Videos on this page** you'll see what was found:
-   - **MP4 / WEBM**: click **Download** and it saves straight to your Downloads folder, named after the page title and quality.
-   - **STREAM** (HLS): click **Choose quality**. A downloader tab opens with every quality the site offers, such as 1080p, 720p and 480p. Pick one and it fetches all segments six at a time, retrying any that fail, with progress, speed and time left shown. It converts the stream to **MP4 automatically** as it downloads. The video is rewrapped, not re-encoded, so there's no quality loss. It saves as one `.mp4` file that plays anywhere.
+Nobody installs it by hand on a Thurea computer: Thurea's browser policies force-install it and
+keep it updated from Thurea's own update server on `127.0.0.1:8137`.
 
-Limits: encrypted or DRM-protected streams are detected and skipped. Stream links expire after a while, so if a download fails, reload the video page and try again.
+| Browsers | Build | Policy |
+|---|---|---|
+| Chrome, Edge, Brave, Vivaldi, Chromium, Helium, Thorium, Yandex | `thurea.crx` (this folder) | `ExtensionInstallForcelist` / `ExtensionSettings` |
+| Firefox, LibreWolf, Waterfox, Zen, Floorp | `thurea-firefox-VERSION.xpi` (`release/firefox-ext.py`) | `ExtensionSettings` in `policies.json` |
 
-## Adding more ad domains
-Add an entry to `rules.json` with a unique `id`, then click the reload ↻ icon on the extension card:
+Firefox and its release-based forks only install add-ons signed by Mozilla: `release/build.sh`
+signs the Firefox build as an unlisted add-on when `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` are set.
+Thurea's status checks that the extension really is in every browser profile in use
+(`extensionInstalled`), and says which profiles lack it.
+
+## Helpers on the computer (native messaging)
+
+* `com.thurea.family` → `thurea family-host`: the family's rules for this account, Thurea's
+  status, and opening Thurea's windows.
+* `com.thurea.ytdlp` → `thurea video-host`: video downloads. What a video offers (every
+  resolution), downloads in the background, progress, cancel. The same list as Thurea's
+  Downloads page and `thurea downloads`.
+
+## Developing
+
+Load this folder unpacked in Chromium (`chrome://extensions` → Developer mode → Load unpacked),
+or build the Firefox version with `release/firefox-ext.py extension /tmp/thurea-ff 0.0.1` and load
+`/tmp/thurea-ff/manifest.json` from `about:debugging`. After changing the service worker or a file
+it imports, run `./bump-sw.sh` (Chromium caches unpacked service workers by file name).
+
+To add an ad domain, add an entry to `rules.json` with a unique `id`:
 ```json
 {"id": 999, "priority": 1, "action": {"type": "block"},
  "condition": {"requestDomains": ["newadnetwork.com"]}}

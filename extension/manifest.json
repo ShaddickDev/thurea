@@ -127,12 +127,16 @@
     },
     {
       "matches": [
-        "*://www.youtube.com/*"
+        "*://www.youtube.com/*",
+        "*://m.youtube.com/*",
+        "*://music.youtube.com/*",
+        "*://www.youtube-nocookie.com/embed/*"
       ],
       "js": [
         "sponsorblock.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     },
     {
       "matches": [

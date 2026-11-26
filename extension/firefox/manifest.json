@@ -1,0 +1,10 @@
+{
+  "//": "Merged over ../manifest.json by release/firefox-ext.py for the Firefox-family build (Firefox, LibreWolf, Waterfox, Zen, Floorp…).",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "thurea@shaddickdev",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  }
+}

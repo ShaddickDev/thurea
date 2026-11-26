@@ -81,6 +81,11 @@ pub fn desktop_status() -> serde_json::Value {
         ("stale", format!("Not checked for {} minutes", age / 60))
     } else if v["protected"].as_bool() == Some(true) {
         ("ok", "This computer is protected".to_string())
+    } else if only_extension_missing(&v) {
+        // Everything is in place, but a browser hasn't installed the extension (yet): browsers
+        // pick up a new policy when they restart.
+        let n = v["extensionMissing"].as_array().map_or(0, Vec::len).max(1);
+        ("degraded", format!("The Thurea extension isn't in {n} browser profile{} yet: close and reopen that browser", if n == 1 { "" } else { "s" }))
     } else {
         ("degraded", "Not fully protected: Thurea is putting it back".to_string())
     };
@@ -88,6 +93,12 @@ pub fn desktop_status() -> serde_json::Value {
     v["line"] = line.into();
     v["age"] = age.into();
     v
+}
+
+/// The only failing check is "the extension is installed in every browser profile".
+fn only_extension_missing(v: &serde_json::Value) -> bool {
+    let Some(checks) = v["checks"].as_object() else { return false };
+    checks.get("extensionInstalled").and_then(|c| c.as_bool()) == Some(false) && checks.iter().all(|(k, c)| k == "extensionInstalled" || c.as_bool() != Some(false))
 }
 
 /// Writes only when the content differs. Returns true if it wrote.
@@ -153,6 +164,15 @@ mod tests {
         assert!(fixed.contains("0.0.0.0 example.org\n") && fixed.contains("10.0.0.2 nas"));
         // removal restores the original
         assert_eq!(merge_hosts(&once, None, "\n").trim_end(), orig.trim_end());
+    }
+
+    #[test]
+    fn a_missing_extension_is_named() {
+        let only = serde_json::json!({ "checks": { "dns": true, "extensionInstalled": false } });
+        assert!(only_extension_missing(&only));
+        let more = serde_json::json!({ "checks": { "dns": false, "extensionInstalled": false } });
+        assert!(!only_extension_missing(&more));
+        assert!(!only_extension_missing(&serde_json::json!({ "checks": { "dns": true } })));
     }
 
     #[test]

@@ -7,8 +7,9 @@ pkgdesc="Thurea: harmful-site and ad blocker managed by the system (hosts block,
 arch=(x86_64)
 url="https://github.com/ShaddickDev/thurea"
 license=(custom)
-depends=(systemd e2fsprogs python nftables openssl)
-optdepends=('jq: add Thurea to the Omarchy bar when the shell is not running'
+depends=(systemd e2fsprogs python nftables openssl curl)
+optdepends=('ffmpeg: video downloads use it to join video and sound (else Thurea fetches its own copy)'
+            'jq: add Thurea to the Omarchy bar when the shell is not running'
             'networkmanager: put the Wi-Fi in the phone-setup QR code'
             'android-tools: set up a phone without resetting it (adb, Wireless debugging)')
 install=thurea.install

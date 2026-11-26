@@ -36,7 +36,10 @@ const SITE_DATA_SAFE_TYPES = { cache: true, cacheStorage: true, serviceWorkers: 
 async function thureaClearSiteData(origins) {
   const ok = [...new Set(origins)].filter(o => { try { return !VPN_NEVER_ADULT.test(new URL(o).hostname); } catch { return false; } });
   if (!ok.length) return;
-  await chrome.browsingData.remove({ origins: ok }, SITE_DATA_SAFE_TYPES);
+  if (!IS_FIREFOX) { await chrome.browsingData.remove({ origins: ok }, SITE_DATA_SAFE_TYPES); return; }
+  // Firefox can only remove service workers per site (by host name), and caches for everything.
+  const hostnames = [...new Set(ok.map(o => new URL(o).hostname))];
+  await chrome.browsingData.remove({ hostnames }, { serviceWorkers: true });
 }
 
 let vpnPort = null;
