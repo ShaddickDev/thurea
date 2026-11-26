@@ -1,272 +1,58 @@
 # Thurea
 
-Family protection that blocks ads, trackers and harmful sites (adult sites included) on every
-device in the household, and is hard to switch off.
+Family protection that blocks ads, trackers and adult sites on every device in the house, and is
+hard to switch off.
 
 ## Install
 
-Every file is on the [latest release](https://github.com/ShaddickDev/thurea/releases/latest);
-installed copies keep themselves up to date. **Thurea is meant to stay:** once installed, the
-package manager refuses to remove it (that's the point — on a weak day, it holds).
-
-### For yourself
-
-**Arch / Omarchy**
+Get the files from the [latest release](https://github.com/ShaddickDev/thurea/releases/latest).
+Thurea updates itself and can't be removed once installed: that's the point.
 
 ```sh
+# Arch / Omarchy
 curl -LO https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.pkg.tar.zst
 sudo pacman -U thurea-linux.pkg.tar.zst
-```
+omarea doctor      # on Omarchy: check that Omarea is fitted in
 
-**Debian / Ubuntu**
-
-```sh
+# Debian / Ubuntu
 curl -LO https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.deb
 sudo apt install ./thurea-linux.deb
-```
 
-**Fedora**
-
-```sh
+# Fedora
 sudo dnf install https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.rpm
 ```
 
-**Omarea on Omarchy.** The package fits Omarea, Thurea's Omarchy app, into every Omarchy user's
-desktop by itself: the widget in the bar (Waybar on Omarchy 3), an **Omarea** submenu in the
-Omarchy menu (SUPER + SPACE), **SUPER + CTRL + U** for Omarea and **SUPER + SHIFT + CTRL + U** for
-Family, notifications when a child asks for something, and Omarchy's theme everywhere, the family
-centre included. Everything is in [docs/omarea.md](docs/omarea.md).
+* **Windows 10 / 11:** extract `thurea-windows.zip`, right-click `Thurea\Install Thurea.cmd` →
+  *Run as administrator*.
+* **Android:** on a computer with Thurea, open **Set up a phone** (new phone) or **Keep my phone**
+  (phone in use, nothing erased) and scan the code.
+* **Browser extension:** nothing to do. Every desktop install puts it in every Chrome-family and
+  Firefox-family browser.
+* **A family:** `sudo thurea init` on the first computer, `sudo thurea join CODE` on the rest,
+  then **Family** → *Start a family* on a parent's device.
 
-```sh
-omarea doctor      # check that every piece is in place
-omarea install     # put Omarea back (after taking it out of the bar, or on a new Omarchy install)
-omarea uninstall   # take it out of the desktop again (Thurea's protection stays exactly as it is)
-omarchy plugin add https://github.com/ShaddickDev/thurea.git --enable   # the widget alone, from Omarchy's plugin manager
-```
+Every option and the full family setup: [docs/install.md](docs/install.md).
 
-**Windows 10 / 11.** Download `thurea-windows.zip`, extract it, right-click
-`Thurea\Install Thurea.cmd` → *Run as administrator*. (Or build the Thurea Windows 11 ISO from
-`windows/` for a fresh install.)
-Thurea for Windows uses no kernel driver, so it can't blue-screen the PC, and games with
-anti-cheat (Valorant's Vanguard, Easy Anti-Cheat, BattlEye) keep working: see
-[docs/windows.md](docs/windows.md) for how it protects, what it's compatible with, and releasing.
+## What it does
 
-**Android.** Thurea runs a phone as its device owner, so it goes on at setup:
+* Family DNS everywhere, other DNS and DNS-over-HTTPS blocked, 64,000+ blocked domains on Linux.
+* Browsers locked down: the Thurea extension (ads, trackers, YouTube ads, SponsorBlock, video
+  downloads), SafeSearch, no incognito.
+* Parents decide, children ask: approvals, screen time, bedtime and Lock now, from a phone or the
+  Family window.
+* One app on every desktop (Omarea on Omarchy, a tray elsewhere) with status, a verse of the day
+  and phone setup.
 
-* *New or factory-reset phone:* on a computer with Thurea, open the tray / Omarea →
-  **Set up a phone** (or `thurea setup-phone`), tap the phone's first Welcome screen 6 times and
-  scan the code.
-* *Phone already in use, nothing erased:* **Keep my phone** in the same window (or
-  `thurea adopt-phone`), with Wireless debugging or a USB cable.
-* *No computer:* host `thurea-android.apk` yourself and make a setup code with
-  `android/make-qr.sh https://…/Thurea.apk`.
+## More
 
-**Browser extension.** Nothing to do on a Thurea computer: every desktop package
-force-installs it in every Chromium browser (Chrome, Edge, Brave, Vivaldi…) and every
-Firefox-family one (Firefox, LibreWolf, Waterfox, Zen, Floorp), snap and Flatpak copies included,
-and keeps it up to date. Thurea's status says if a browser profile is missing it. The standalone
-builds are on the release too: `thurea-extension.crx` (Chromium) and
-`thurea-extension-firefox.xpi` (Firefox family: open the file in the browser to add it). See
-[extension/README.md](extension/README.md).
-
-### For a family
-
-Install Thurea on every device first (above) — the parents' own devices included: parents get
-the adult protection, children get the stricter one, and one family links them.
-
-1. **One household.** On the first computer: `sudo thurea init` — it prints a pairing code. On
-   every other computer: `sudo thurea join CODE`. Phones set up from a computer in the household
-   (Set up a phone / Keep my phone) join it by themselves; a phone that already has Thurea joins
-   with `sudo thurea pair-android` over USB.
-2. **Start the family** on a parent's device: on the phone, Thurea → **Family** → *Start a
-   family*; on a computer, **Family** in the tray or Omarea (it asks for admin once), or
-   `sudo thurea family create "Your name"`.
-3. **The other parent:** on their phone, Family → *I'm a parent too*; on their computer,
-   `thurea family join "Name"`. Approve it on your device only if both show the same 6-digit code.
-4. **Children's phones:** set them up as above, then on your device: Family → Devices → the
-   phone → *A child's device* → the child's name. Social media freezes until you approve it,
-   new apps wait for you, YouTube goes to Restricted Mode, and the phone can't be reset.
-5. **Shared computers:** give each child a *standard* (not administrator) account. Then Family →
-   Devices → the computer → the account → *Child's account* (or
-   `thurea family account DEVICE USER CHILD`). That account gets the child's sites, programs and
-   screen time; the grown-ups' accounts keep the adult protection.
-6. **Screen time:** under each child — daily limit, social media limit, bedtime, and *Pause*,
-   *Lock now*, *+15 / +30* for right now. Offline codes for when there's no internet.
-7. **Away from home** (optional): run your own relay — see [below](#your-own-relay-reach-the-family-from-anywhere).
-
-Day to day, requests come to the parents' phones as notifications and to the computers' **Family**
-window (`thurea control-center`).
-
-## What Thurea does
-
-One project, one version, one release, on every platform:
-
-| Platform | What it does | Installs from |
-|---|---|---|
-| **Windows** | Family DNS (Cloudflare for Families) on every network, other DNS servers and public DNS-over-HTTPS blocked in the firewall, every Chromium browser locked (Thurea extension force-installed, SafeSearch, no incognito/guest), Firefox policies, Tor/Mullvad/Opera blocked, can't be uninstalled (tasks restore each other, no Uninstall in Settings), tray app (status, verse of the day, phone setup by QR) | `thurea-windows.zip` → `Thurea\Install Thurea.cmd`, or the Thurea Windows 11 ISO (`windows/`) |
-| **Linux** (Arch / Omarchy, Debian / Ubuntu, Fedora) | The same, plus a hosts block of 64,000+ domains, nftables DNS lockdown, and a package that can't be removed (pacman hook / apt `Protected` / dnf protected packages). **Omarchy first:** [Omarea](docs/omarea.md), Thurea made for Omarchy, fits itself in: bar widget, notifications, Omarchy menu, keybindings, the theme's colours (status, verse of the day, family, phone setup by QR); other desktops get `thurea-tray` | `thurea-linux.pkg.tar.zst` · `thurea-linux.deb` · `thurea-linux.rpm` |
-| **Android** | Device owner: family DNS, private DNS/VPN checks, locked apps, YouTube ad blocker, household mesh; set up with one QR scan (`thurea setup-phone`) | `thurea-android.apk` |
-| **Browser extension** | Ads, trackers, pop-unders, cookie banners, YouTube ads and SponsorBlock, video downloads at every resolution (through Thurea's downloader, shared with its Downloads page); adult sites blocked when the `pornBlock` policy is set (the desktop platforms set it). Force-installed in every Chromium browser (Chrome, Edge, Brave, Vivaldi…) and every Firefox-family one (Firefox, LibreWolf, Waterfox, Zen, Floorp), snap and Flatpak copies included | inside every desktop package; `thurea-extension.crx`, `thurea-extension-firefox.xpi` |
-
-## Family: parents and children
-
-Thurea protects the parents themselves, and children's devices more strictly. A parent starts a
-family on their phone (Thurea → Family → Start a family) or computer (`thurea family create NAME`),
-then marks each child's device from the household's device list.
-
-* **Only parents decide.** A parent's device holds an Ed25519 key; once there is a family, every
-  device takes new rules only if a parent signed them. A child's device can ask, never decide.
-  Household traffic is encrypted (XChaCha20-Poly1305), so what children ask for stays in the family.
-* **A child's phone gets:** YouTube Restricted Mode (strict, in Chrome; CleanBrowsing's family DNS
-  enforces it in every app, the YouTube app included), social media (TikTok, Instagram, Snapchat,
-  Discord, X, Reddit…) frozen until a parent approves, new apps held until a parent approves,
-  messaging allowed (a parent can switch it off), no factory reset, safe mode or clock changes,
-  and optionally no USB debugging.
-* **Ask a parent:** the child taps a frozen app (or types a website) in Thurea; the parent's phone
-  shows it and the parent allows it for 30 minutes, 2 hours, always, or declines. Approvals that
-  run out re-freeze the app by themselves.
-* **Adults' devices** keep exactly the protection they had; family rules never loosen them.
-
-* **Control center (every desktop):** Family in Omarea, the Linux tray, the Windows
-  tray or the browser extension's Thurea tab opens `thurea control-center`: an overview of what's
-  waiting and each child's day, a page per child (screen time, Pause / Lock now / extra time,
-  offline codes, what they may use, always-allowed apps, approvals), the household's devices,
-  parents and the relay. It opens as an app window in Edge, Chrome, Chromium, Brave or Vivaldi
-  (whichever is installed, under any distro's name for it), else the default browser, and follows
-  the system's light or dark mode (on Omarchy, the current Omarchy theme, live as you switch); see [docs/family.md](docs/family.md). It runs as you — no
-  admin — and signs changes with *your* parent key
-  (`~/.config/thurea/parent.key`, `%APPDATA%\Thurea\parent.key`); Thurea's service only takes a
-  change a parent signed, so a child on the same computer can't make one. Starting a family on a
-  computer asks for admin once.
-* **Video downloads (every desktop, no admin):** Thurea → Download in any browser, the
-  Downloads page of Thurea's window, or `thurea download URL [--quality 1080]` save a video from
-  YouTube and most other sites at any resolution it comes in (up to 8K), or just the sound, into
-  your Downloads folder. All three show the same list with live progress. Thurea keeps its own
-  up-to-date yt-dlp (and ffmpeg if the computer has none) per user, checked against the
-  published checksums; sites Thurea blocks can't be downloaded from.
-* **More than one parent:** on another phone or computer, "I'm a parent too" (`thurea family join
-  NAME`) asks the family; an existing parent approves it after checking the 6-digit code both
-  devices show.
-
-### Your own relay (reach the family from anywhere)
-
-At home, devices find each other on the network. Away from home — a child's phone on mobile data,
-you at work — they talk through a relay you run yourself. It only forwards the family's encrypted
-messages (it can't read or change them) and stores nothing.
-
-1. On any computer with a public address (a small VPS, or a home server with UDP port 47830
-   forwarded): `thurea relay` (or as a service: `ExecStart=/usr/bin/thurea relay` in a systemd unit).
-2. A parent enters its address (`relay.example.org:47830`) under Family → Away from home, or runs
-   `thurea family relay relay.example.org:47830`. Every device learns it with the family policy.
-
-* **Screen time:** for each child, a daily limit (all apps), limits for social media or single
-  apps, bedtime, Pause, Lock now and extra time today — from the parent's phone, the control
-  center or `thurea family screen`. Children's phones count use themselves (Thurea's helper; no
-  extra permission) and report today's total and top apps, encrypted, to the parents. Without a
-  network, a parent's 6-digit **offline code** gives 15–120 extra minutes (that child, that day,
-  once; five wrong tries an hour).
-* **Children's accounts on shared computers (Windows, Linux):** the computer stays an adult's
-  device; a parent marks some of its user accounts as a child's (Devices in the control center or
-  the Family page, or `thurea family account DEVICE USER CHILD`). For those accounts Thurea's
-  service counts active session time, closes blocked programs (Discord, Telegram…), locks the
-  session at bedtime, while paused, when the day's time is used up and on Lock now; the browser
-  extension asks Thurea's helper (`thurea family-host`, running as the user) and blocks the
-  child's blocked sites and forces YouTube Restricted Mode in that account only. Children's
-  accounts must be standard accounts (an administrator can switch anything off; Thurea says so).
-  `thurea family check` shows what Thurea would do, without doing it.
-
-
-## Desktop apps (Omarea on Omarchy, Linux tray, Windows tray)
-
-Every desktop has the same Thurea app:
-
-* **Status:** a single protection summary on the home screen. Use the gear to open Settings.
-* **Verse of the day:** the World English Bible (public domain), the same verse on every device
-  (`policy/verses.json`). It can be switched off in Settings on every platform, Android included.
-* **Set up a phone:** a QR code for a new or factory-reset Android phone. Tap the Welcome screen
-  6 times, then scan. The phone downloads Thurea from this computer, checks its SHA-256, and makes
-  Thurea the device owner. The download exists only while the code is on screen.
-* **Keep my phone:** the same, for a phone that's already in use, with nothing erased. The
-  computer shows the QR code for Android's *Wireless debugging → Pair device with QR code* (or
-  takes a phone plugged in by USB). `thurea adopt-phone` then installs Thurea, signs the
-  accounts out for the one moment Android requires, makes Thurea the device owner, and signs
-  them back in (you enter passwords on the phone). Needs adb (`android-tools` on Arch).
-* **Opening animation:** the Thurea logo draws itself (outline, fill, check), the same 1.4 s
-  timeline on Android, Windows and Linux. It can be switched off.
-
-| | Where | Built from |
-|---|---|---|
-| Omarchy | **Omarea**: shell plugin `thurea.omarea` (bar widget + notification service) on Omarchy 4, a Waybar module on Omarchy 3, menu entries and keybindings; fitted in by the package (`omarea install`), or the widget alone with `omarchy plugin add https://github.com/ShaddickDev/thurea.git` (the repository's root `manifest.json` points at the plugin). See [docs/omarea.md](docs/omarea.md) | `linux/omarchy-plugin/omarea/` (QML) + `linux/files/omarea` + `thurea` (Rust) |
-| Other Linux desktops | `thurea-tray` (StatusNotifier tray; its window is a local page) | `crates/thurea-tray/` (Rust) |
-| Windows | `ThureaTray.exe`, compiled on the PC by Windows' own C# compiler | `windows/thurea/tray/` |
-| Android | the app itself | `android/` |
-
-## Credits
-
-Thurea ships only permissively licensed, public-domain or attribution-licensed material, and
-credits all of it in [CREDITS.md](CREDITS.md), which is also shown in every app. The adult-site
-list is rebuilt from licensed sources by `policy/update-lists.sh`.
-
-## Updates
-
-Every Thurea updates itself from this repository's releases, checking every hour (Windows:
-the "Thurea Update" task; Linux: `thurea-update.timer`; Android: Thurea's background job). A release is installed only if
-
-1. `thurea-manifest.json` is signed with Thurea's release key — the public half ships with every
-   install (`release/release-key.pub.pem`) — so a release that wasn't made with the key is ignored,
-   even if someone could upload to this repository, and
-2. the downloaded file matches the SHA-256 in that signed manifest, and
-3. it is newer than what's installed. (Android additionally requires the same APK signing key.)
-
-## Push to release
-
-Once a Thurea is installed, updates arrive by themselves, straight from git:
-
-1. **Push** the main branch. `release/hooks/pre-push` (turned on with `release/install-hooks.sh`)
-   waits until the push has landed, then runs `release/auto-release.sh` in the background.
-2. **auto-release.sh** builds that exact commit in a clean checkout, never from uncommitted
-   files. It numbers it (the last release + 0.0.1, or a higher `release/VERSION` in the commit),
-   signs the manifest, publishes it as the latest GitHub release and tags the commit. A push that
-   only changes documentation or tests isn't released. Logs: `~/.local/state/thurea-release/`.
-3. **Every installed Thurea checks hourly** (Windows task, Linux `thurea-update.timer`,
-   Android's job) and installs the new signed release by itself, so a push reaches every device
-   within about an hour.
-
-The pre-push hook checks outgoing commits for private feature code, and the publisher checks the
-contents of the signed release archives, including the copies of the extension bundled with desktop
-installers. `THUREA_NO_RELEASE=1` skips the automatic release and still checks outgoing commits.
-
-The signing keys never leave the computer that pushes: nothing secret is stored on GitHub.
-`release/auto-release.sh --dry-run`
-builds and signs without publishing.
-
-## Building a release
-
-```
-release/build.sh 1.0.1        # builds every platform into dist/ and signs the manifest
-release/publish.sh            # uploads dist/ as GitHub release v1.0.1 (latest)
-```
-
-Building needs, besides Rust, the Android SDK and Chromium: `makepkg` (Arch package),
-`dpkg-deb` and `rpmbuild` for the Debian / Fedora packages — on Arch: `sudo pacman -S dpkg rpm-tools`.
-
-The signing keys are never in this repository: `~/.config/thurea/release-key.pem` (release
-manifest), `~/.config/thurea/extension-key.pem` (extension ID), and the Android keystore used by
-`android/build.sh`.
-
-## Layout
-
-```
-extension/   the Thurea browser extension (and host/, its optional native helper)
-linux/       Thurea for Linux: stage.sh (one file layout) → PKGBUILD (Arch), debian/ (.deb), rpm/ (.rpm);
-             thurea-apply, systemd units, pacman hooks, self-update, Omarea (the Omarchy plugin and `omarea`)
-windows/     Thurea for Windows (thurea/Thurea.ps1, tray app) and the Windows 11 ISO build
-android/     Thurea for Android
-crates/      Rust: thurea-core (shared by Android and desktop), thurea-agent (`thurea`: phone setup,
-             verses, status, household mesh), thurea-tray (Linux tray outside Omarchy 4)
-policy/      verses.json (World English Bible), blocklist.txt, update-lists.sh
-bend/        audit.bend: bulk blocklist audits on the Bend/HVM parallel runtime (`thurea audit --engine bend`);
-             tests/ and test.sh: Bend property tests for bedtime windows and the audit (`bend/test.sh`)
-release/     build.sh, publish.sh, release public key, VERSION
-lab/         isolated test lab (VMs / emulator, no internet)
-```
+| | |
+|---|---|
+| [Install in detail](docs/install.md) | Every platform, Omarea commands, family setup |
+| [What each platform does](docs/platforms.md) | Windows, Linux, Android, the extension |
+| [Parents and children](docs/parents-and-children.md) | Rules, screen time, children's accounts, your own relay |
+| [Family control centre](docs/family.md) | The parents' window on every device |
+| [Desktop apps](docs/desktop-apps.md) | Omarea, the Linux tray, the Windows tray |
+| [Omarea](docs/omarea.md) | Thurea made for Omarchy |
+| [Windows](docs/windows.md) | How it protects, games and anti-cheat, recovery |
+| [Releasing](docs/releasing.md) | Updates, push to release, building, repository layout |
+| [Credits](CREDITS.md) | Everything Thurea ships and its licences |
