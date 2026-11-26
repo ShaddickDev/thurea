@@ -1,0 +1,3 @@
+# Changes to the release workflow and scripts need the owner's review.
+/.github/ @ShaddickDev
+/release/ @ShaddickDev
