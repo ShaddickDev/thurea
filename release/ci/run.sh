@@ -25,6 +25,7 @@ if [ "$MODE" = test ]; then
   openssl rand -hex 24 > "$K/android-keystore-pass"
   keytool -genkeypair -noprompt -keystore "$K/android-release.jks" -storetype PKCS12 \
     -storepass:file "$K/android-keystore-pass" -alias thurea -keyalg RSA -keysize 2048 -validity 2 -dname CN=thurea-ci-test
+  umask 022  # the keys above stay private; the packages need normal permissions
   "$R/release/build.sh" "$VER"
   D=$R/dist
   python3 -I "$R/release/check-public.py" --assets "$D"/thurea-*.{crx,xpi,zst,deb,rpm,zip,apk}
@@ -58,6 +59,7 @@ unset THUREA_RELEASE_KEY THUREA_EXTENSION_KEY THUREA_ANDROID_KEYSTORE THUREA_AND
 [ "${THUREA_REQUIRE_SIGNED:-}" = 1 ] || unset THUREA_REQUIRE_SIGNED
 
 echo "== Releasing $(git -C "$R" log -1 --format='%h %s') as Thurea $VER"
+umask 022
 "$R/release/build.sh" "$VER"
 THUREA_REPO=$REPO THUREA_TARGET=${GITHUB_SHA:-} "$R/release/publish.sh"
 echo "== Published Thurea $VER: https://github.com/$REPO/releases/tag/v$VER"
