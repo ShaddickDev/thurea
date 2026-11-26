@@ -43,6 +43,7 @@ for p in sys.argv[1:3]:
     json.dump(m, open(p, "w"), indent=2); open(p, "a").write("\n")
 PY
 cp "$R/CREDITS.md" "$C/CREDITS.md"
+cp "$R/extension/icons/thurea.svg" "$C/omarea.svg"
 
 # ---- Extension ----
 ( cd "$R/extension" && tar --exclude='host' --exclude='firefox' --exclude='README.md' --exclude='bump-sw.sh' -cf - . ) | tar -xf - -C "$B/ext"

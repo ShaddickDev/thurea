@@ -12,7 +12,7 @@
 # released, or that only changes documentation, is skipped.
 #
 # Built from the commit itself, never from uncommitted files. The keys stay on this computer
-# (~/.config/thurea, the Android keystore): nothing secret goes to GitHub.
+# (~/.config/thurea, the Android keystore). The GitHub workflow (.github/workflows/release.yml) is the other route.
 set -euo pipefail
 R=$(cd "$(dirname "$0")/.." && pwd)
 DRY=0; [ "${1:-}" = --dry-run ] && { DRY=1; shift; }

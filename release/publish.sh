@@ -28,7 +28,9 @@ echo "Publishing Thurea $VER to github.com/$REPO"
 NOTES="Thurea $VER for Windows, Linux (Arch / Omarchy, Debian / Ubuntu, Fedora) and Android. Installed copies update themselves; every file is checked against the signed thurea-manifest.json."
 CHANGES=$(awk -v v="$VER" '/^## /{f = ($2 == v); next} f' "$R/CHANGELOG.md" 2>/dev/null || true)
 [ -n "$CHANGES" ] && NOTES="$NOTES"$'\n\n'"$CHANGES"
-gh release create "v$VER" --repo "$REPO" --title "Thurea $VER" --latest \
+# THUREA_TARGET (a commit) tags that commit when the tag doesn't exist yet (the GitHub workflow).
+TARGET=(); [ -n "${THUREA_TARGET:-}" ] && TARGET=(--target "$THUREA_TARGET")
+gh release create "v$VER" --repo "$REPO" --title "Thurea $VER" --latest "${TARGET[@]}" \
   --notes "$NOTES" \
   "${ASSETS[@]}" \
   "$D"/thurea-manifest.json "$D"/thurea-manifest.json.sig

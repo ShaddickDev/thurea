@@ -1,0 +1,99 @@
+# Builds every Thurea package on GitHub and publishes the signed release.
+#
+#   Release:  Actions → Release → Run workflow (on master), or push a tag vX.Y.Z that matches
+#             release/VERSION. The run then waits for ShaddickDev to approve the "release"
+#             environment before it can read the signing keys.
+#   Pull requests that touch the release scripts run "Test build": the same build with
+#             throwaway keys and no secrets, and nothing is published.
+#
+# No third-party actions: every step is a script in this repository, so there is nothing to pin
+# except the container image, which is pinned by digest.
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - release/**
+      - android/build.sh
+      - linux/PKGBUILD
+      - linux/stage.sh
+      - linux/debian/**
+      - linux/rpm/**
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test-build:
+    name: Test build (throwaway keys)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container: archlinux:base-devel@sha256:949ecb1661609ab7e8f6854ba03efd62792e7a796313738e94b040c095c20d91
+    steps:
+      - name: Install git
+        run: pacman -Sy --noconfirm --needed archlinux-keyring && pacman -Su --noconfirm --needed git
+      - name: Check out
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory '*'
+          git init -q . && git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
+            fetch -q --depth=1 origin "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+      - name: Set up the build tools
+        run: release/ci/setup-arch.sh
+      - name: Build and sign with throwaway keys
+        run: sudo -E -H -u builder release/ci/run.sh test
+
+  release:
+    name: Build and publish
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # Required reviewer (ShaddickDev) and branch rules (master, v* tags) are set on this
+    # environment in the repository settings; the signing keys are its secrets, not repository
+    # secrets, so no other job or branch can read them.
+    environment: release
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    container: archlinux:base-devel@sha256:949ecb1661609ab7e8f6854ba03efd62792e7a796313738e94b040c095c20d91
+    steps:
+      - name: Install git
+        run: pacman -Sy --noconfirm --needed archlinux-keyring && pacman -Su --noconfirm --needed git
+      - name: Check out
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory '*'
+          git init -q . && git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
+            fetch -q --depth=1 origin "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+      - name: Set up the build tools
+        run: release/ci/setup-arch.sh
+      - name: Build, sign and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THUREA_RELEASE_KEY: ${{ secrets.THUREA_RELEASE_KEY }}
+          THUREA_EXTENSION_KEY: ${{ secrets.THUREA_EXTENSION_KEY }}
+          THUREA_ANDROID_KEYSTORE: ${{ secrets.THUREA_ANDROID_KEYSTORE }}
+          THUREA_ANDROID_KEYSTORE_PASS: ${{ secrets.THUREA_ANDROID_KEYSTORE_PASS }}
+          THUREA_WINDOWS_PFX: ${{ secrets.THUREA_WINDOWS_PFX }}
+          THUREA_WINDOWS_PFX_PASS: ${{ secrets.THUREA_WINDOWS_PFX_PASS }}
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          THUREA_REQUIRE_SIGNED: ${{ vars.THUREA_REQUIRE_SIGNED }}
+        run: sudo -E -H -u builder release/ci/run.sh release

@@ -36,7 +36,9 @@ install -dm755 "$D/usr/share/thurea"
 cp -r "$L/omarchy-plugin/omarea" "$D/usr/share/thurea/omarchy-plugin"
 find "$D/usr/share/thurea/omarchy-plugin" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
 for a in omarea omarea-family omarea-phone; do inst 644 "$F/$a.desktop" "usr/share/applications/$a.desktop"; done
-inst 644 "$L/../extension/icons/thurea.svg" usr/share/icons/hicolor/scalable/apps/omarea.svg
+# The icon comes with DATA (release/build.sh stages linux/ on its own, away from extension/).
+ICON=$DATA/omarea.svg; [ -f "$ICON" ] || ICON=$L/../extension/icons/thurea.svg
+inst 644 "$ICON" usr/share/icons/hicolor/scalable/apps/omarea.svg
 
 # The Rust agent and tray, the Android app the phone setup serves, the shared data.
 inst 755 "$DATA/thurea"      usr/bin/thurea
