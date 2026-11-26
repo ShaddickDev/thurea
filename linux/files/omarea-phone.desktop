@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Omarea: Set up a phone
+Comment=Put Thurea on an Android phone with one QR scan
+Exec=omarea phone
+TryExec=omarea
+Icon=omarea
+Terminal=false
+Categories=System;Security;
+Keywords=android;phone;qr;setup;thurea;
+StartupNotify=false

@@ -1,0 +1,627 @@
+#!/bin/bash
+# Omarea: Thurea, made for Omarchy (Omarchy + Thurea). One command for everything Thurea does on
+# an Omarchy desktop, and for fitting Thurea into Omarchy the way Omarchy's own pieces fit:
+#
+#   Omarchy 4 (omarchy-shell)   the Omarea bar widget + notification service (a shell plugin),
+#                               an Omarea submenu in the Omarchy menu (SUPER + SPACE),
+#                               SUPER + CTRL + U / SUPER + SHIFT + CTRL + U in hypr/bindings.lua
+#   Omarchy 3 (Waybar, Walker)  an Omarea module in Waybar, the same keybindings in
+#                               hypr/bindings.conf, notifications through mako
+#   Both                        Omarea, Omarea Family and Set up a phone in the app launcher,
+#                               the theme's colours everywhere (live on every theme switch)
+#
+# Everything it adds to your own files sits between "Omarea (Thurea) begin" and "end" lines,
+# so `omarea uninstall` takes out exactly that and nothing else. Thurea's protection itself is
+# not part of Omarea: uninstalling Omarea leaves it exactly as it is.
+set -u
+
+VERSION=$(cat /usr/share/thurea/VERSION 2>/dev/null || echo dev)   # Thurea's version: they ship together
+ID=thurea.omarea
+OLD_ID=thurea.omarchy                 # the bar plugin's id before it became Omarea
+SRC=${OMAREA_PLUGIN_SRC:-/usr/share/thurea/omarchy-plugin}
+CFG=${XDG_CONFIG_HOME:-$HOME/.config}
+OMA=$CFG/omarchy
+MARKS=$CFG/thurea
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/omarea
+BEGIN="Omarea (Thurea) begin"
+END="Omarea (Thurea) end"
+RUNTIME=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+WAYBAR_SIGNAL=13
+
+# Nerd Font glyphs, as UTF-8 bytes: \U escapes need a UTF-8 locale, and the package runs this
+# under pacman's.
+G_OK=$'\xf3\xb0\x95\xa5'      # shield with a check
+G_BAD=$'\xf3\xb0\xbb\x8c'     # shield with an alert
+G_OFF=$'\xf3\xb0\xa6\x9e'     # shield, crossed out
+G_WAIT=$'\xf3\xb0\x92\x99'    # shield outline (checking)
+G_FAMILY=$'\xf3\xb1\xa0\xa3'
+G_PHONE=$'\xf3\xb0\xa7\x95'
+G_KEEP=$'\xf3\xb0\xa5\x91'
+G_DOWN=$'\xf3\xb0\x87\x9a'
+G_REAPPLY=$'\xf3\xb0\x82\xaa'
+G_BELL=$'\xf3\xb0\x82\x9a'
+G_DOCTOR=$'\xf3\xb0\x93\x99'
+G_TIME=$'\xf3\xb0\x8b\xa7'
+
+have() { command -v "$1" >/dev/null 2>&1; }
+say() { [ "${QUIET:-0}" = 1 ] || printf '%s\n' "$*"; }
+
+# ── Which Omarchy is this? ──
+# 4: omarchy-shell (Quickshell) draws the bar, menus and notifications.
+# 3: Waybar, Walker and mako.  0: not Omarchy (Omarea leaves the desktop alone).
+omarchy_gen() {
+  if [ -n "${OMAREA_OMARCHY:-}" ]; then echo "$OMAREA_OMARCHY"; return; fi
+  local p=${OMARCHY_PATH:-}
+  if { [ -n "$p" ] && [ -f "$p/shell/shell.qml" ]; } || [ -f /usr/share/omarchy/shell/shell.qml ] ||
+     [ -f "$HOME/.local/share/omarchy/shell/shell.qml" ]; then
+    echo 4
+  elif [ -d "$OMA" ] && { [ -n "$p" ] || [ -d "$HOME/.local/share/omarchy" ]; }; then
+    echo 3
+  else
+    echo 0
+  fi
+}
+
+shell_up() { have omarchy-shell && [ "$(omarchy-shell shell ping 2>/dev/null)" != "" ]; }
+
+# A call to the Omarea widget in the running shell; true if it answered.
+ipc() {
+  have omarchy-shell || return 1
+  local out
+  out=$(omarchy-shell "$ID" "$@" 2>/dev/null) || return 1
+  case $out in unknown*|*rror*|*"No running"*|*"not found"*) return 1 ;; esac
+  return 0
+}
+
+# ── Notifications: Omarchy's own on 4 (with buttons), mako through notify-send on 3 ──
+# notify URGENCY GLYPH HEADLINE BODY [LABEL COMMAND...]
+notify() {
+  local urgency=$1 glyph=$2 head=$3 body=$4; shift 4
+  if have omarchy-notification-send; then
+    local args=(--app-name Omarea -g "$glyph" -u "$urgency" "$head" "$body")
+    [ $# -ge 2 ] && args+=(--action "$@")
+    omarchy-notification-send "${args[@]}" >/dev/null 2>&1 && return 0
+  fi
+  if have notify-send; then
+    notify-send -a Omarea -i omarea -u "$urgency" "$glyph  $head" "$body" >/dev/null 2>&1
+  fi
+}
+
+notifications_on() { ! grep -qx 'notifications=off' "$MARKS/omarea.conf" 2>/dev/null; }
+
+# ── Opening things ──
+
+# thurea-tray's page (Omarchy 3 and other desktops): its address, starting the tray if needed.
+tray_url() {
+  local f=$RUNTIME/thurea-tray.url u port i
+  for i in $(seq 1 40); do
+    if [ -f "$f" ]; then
+      u=$(head -n1 "$f"); port=${u#http://127.0.0.1:}; port=${port%%/*}
+      if [ -n "$port" ] && (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+        printf '%s' "$u"; return 0
+      fi
+    fi
+    [ "$i" = 1 ] && have thurea-tray && setsid -f thurea-tray >/dev/null 2>&1 </dev/null
+    sleep 0.15
+  done
+  return 1
+}
+
+open_url() {
+  if have xdg-open; then setsid -f xdg-open "$1" >/dev/null 2>&1 </dev/null
+  else printf '%s\n' "$1"; fi
+}
+
+# Omarea itself: the bar panel on Omarchy 4, thurea-tray's window elsewhere.
+open_omarea() {   # open_omarea METHOD ANCHOR
+  if [ "$(omarchy_gen)" = 4 ]; then
+    ipc "$1" && return 0
+    notify normal "$G_OFF" "Omarea isn't in the bar" "Put it back with: omarea install" "Put it back" omarea install
+    return 1
+  fi
+  local u
+  if u=$(tray_url); then open_url "$u$2"; return 0; fi
+  notify normal "$G_OFF" "Omarea couldn't open" "Thurea's tray didn't start. Is Thurea installed? (omarea doctor)"
+  return 1
+}
+
+family() {
+  have thurea || { echo "Thurea isn't installed." >&2; return 1; }
+  if [ -n "${1:-}" ]; then thurea control-center --page "$1"; else thurea control-center; fi
+}
+
+reapply() {
+  if [ "$(omarchy_gen)" = 4 ] && ipc reapply; then return 0; fi
+  if pkexec systemctl start thurea.service; then
+    notify low "$G_REAPPLY" "Protection re-applied" "Thurea checked and put everything back."
+  else
+    notify normal "$G_BAD" "Couldn't re-apply" "Not authorised? Thurea re-applies by itself every 5 minutes."
+    return 1
+  fi
+}
+
+# ── Status: JSON for scripts, or Waybar's custom-module format ──
+
+status_json() { thurea desktop-status 2>/dev/null || echo '{"state":"unknown","line":"Thurea isn'"'"'t installed on this computer"}'; }
+family_json() { thurea family --json 2>/dev/null || echo '{}'; }
+
+waybar_status() {
+  local st fam
+  st=$(status_json); fam=$(family_json)
+  jq -cn --argjson s "$st" --argjson f "$fam" \
+    --arg ok "$G_OK" --arg bad "$G_BAD" --arg off "$G_OFF" --arg wait "$G_WAIT" '
+    ($s.state // "unknown") as $state
+    | (if ($f.parent == true) then ($f.inbox // [] | length) else 0 end) as $n
+    | {
+        text: (if $state == "ok" then $ok elif $state == "unknown" then $off elif $state == "stale" then $wait else $bad end),
+        alt: $state,
+        class: ([if $state == "ok" then "protected" else "attention" end] + (if $n > 0 then ["waiting"] else [] end)),
+        tooltip: ([ "Omarea · " + ($s.line // "") ]
+          + (if $n > 0 then ["\($n) family request\(if $n == 1 then "" else "s" end) waiting"] else [] end)
+          + ["", "Click: Omarea · Middle: set up a phone · Right: family"] | join("\n"))
+      }'
+}
+
+# ── Notifications when something needs a parent (run every 30 s by the shell service on
+# Omarchy 4, by the Waybar module on Omarchy 3) ──
+check() {
+  have thurea && have jq || return 0
+  notifications_on || return 0
+  mkdir -p "$STATE_DIR"
+  local sf=$STATE_DIR/check.json prev st fam out
+  prev=$(cat "$sf" 2>/dev/null); jq -e . >/dev/null 2>&1 <<<"$prev" || prev='{}'
+  st=$(status_json); fam=$(family_json)
+  jq -e . >/dev/null 2>&1 <<<"$st" || return 0
+  jq -e . >/dev/null 2>&1 <<<"$fam" || fam='{}'
+  # One jq pass decides what to say and the next state; bash only sends what it says.
+  out=$(jq -c --argjson p "$prev" --argjson s "$st" --argjson f "$fam" -n '
+    ($s.state // "unknown") as $state
+    | ($p.state // "") as $was
+    | ($p.bad // 0) as $bad
+    | (if $state == "ok" or $state == "unknown" then 0 else $bad + 1 end) as $nbad
+    | ($f.day // "") as $day
+    | (if ($p.day // "") == $day then ($p.low // []) else [] end) as $low
+    | (if $f.parent == true then ($f.inbox // []) else [] end) as $inbox
+    | ($p.seen // null) as $seen
+    | [$inbox[] | select($seen != null and (.id as $i | $seen | index($i) | not))] as $new
+    | [ ($f.children // {}) | to_entries[]
+        | {name: .key, used: (.value.today.used // 0), allowed: (.value.today.allowed // .value.screen.daily_minutes // 0)}
+        | select(.allowed > 0 and (.allowed - .used) > 0 and (.allowed - .used) <= 10)
+        | select(.name as $n | $low | index($n) | not) ] as $lowNow
+    | {
+        next: { state: $state, bad: $nbad, notified: (if $nbad == 0 then false else (($p.notified // false) or $nbad == 2) end),
+                seen: [$inbox[].id], day: $day, low: ($low + [$lowNow[].name]) },
+        say: (
+          (if $nbad == 2 and ($p.notified // false | not) then [{k: "bad", line: ($s.line // "")}] else [] end)
+          + (if $nbad == 0 and ($p.notified // false) and $state == "ok" then [{k: "back"}] else [] end)
+          + (if ($new | length) == 1 then [{k: "one", child: $new[0].child, label: ($new[0].label // $new[0].item)}]
+             elif ($new | length) > 1 then [{k: "many", n: ($new | length)}] else [] end)
+          + [$lowNow[] | {k: "low", child: .name, left: (.allowed - .used)}]
+        )
+      }') || return 0
+  printf '%s\n' "$(jq -c .next <<<"$out")" > "$sf.tmp" && mv -f "$sf.tmp" "$sf"
+  local line k
+  while IFS= read -r line; do
+    k=$(jq -r .k <<<"$line")
+    case $k in
+      bad)  notify critical "$G_BAD" "Protection needs attention" "$(jq -r .line <<<"$line"). Thurea is putting it back." "Re-apply now" omarea reapply ;;
+      back) notify low "$G_OK" "Protected again" "This computer is fully protected by Thurea." ;;
+      one)  notify normal "$G_FAMILY" "$(jq -r '.child + " is asking"' <<<"$line")" "$(jq -r '"For " + .label + ". Approve or decline in Family."' <<<"$line")" "Open Family" omarea family ;;
+      many) notify normal "$G_FAMILY" "$(jq -r '"\(.n) family requests"' <<<"$line")" "Waiting for a parent in Family." "Open Family" omarea family ;;
+      low)  notify low "$G_TIME" "$(jq -r '.child + ": \(.left) min left"' <<<"$line")" "Screen time for today is nearly used up." "Open Family" omarea family ;;
+    esac
+  done < <(jq -c '.say[]' <<<"$out")
+}
+
+# ── Your files: marked blocks ──
+
+has_block() { [ -f "$1" ] && grep -qF "$BEGIN" "$1"; }
+
+drop_block() {   # drop_block FILE
+  [ -f "$1" ] && has_block "$1" || return 0
+  local tmp; tmp=$(mktemp "$1.omarea.XXXXXX") || return 1
+  awk -v b="$BEGIN" -v e="$END" 'index($0, b) { skip = 1 } !skip { print } index($0, e) { skip = 0 }' "$1" > "$tmp" \
+    && cat "$tmp" > "$1"; rm -f "$tmp"
+}
+
+append_block() {   # append_block FILE (block on stdin)
+  local f=$1 block; block=$(cat)
+  drop_block "$f"
+  mkdir -p "$(dirname "$f")"
+  { [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && echo; printf '%s\n' "$block"; } >> "$f"
+}
+
+# Omarchy 4's menu: JSONC whose keys are entries. Ours go right after the opening brace, each
+# ending in a comma (the menu parser drops a trailing one), so the file stays valid whatever
+# the rest of it looks like.
+menu_entries() {
+  cat <<EOF
+  // $BEGIN: added by \`omarea install\`; \`omarea uninstall\` removes it
+  "omarea": {"icon":"$G_OK","label":"Omarea","description":"Thurea family protection, parental controls, screen time"},
+  "omarea.open": {"icon":"$G_OK","label":"Open Omarea","action":"omarea toggle","description":"protection status verse of the day"},
+  "omarea.family": {"icon":"$G_FAMILY","label":"Family","action":"omarea family","description":"children requests screen time pause lock parents"},
+  "omarea.downloads": {"icon":"$G_DOWN","label":"Video downloads","action":"omarea downloads","description":"youtube video download"},
+  "omarea.phone": {"icon":"$G_PHONE","label":"Set up a phone","action":"omarea phone","description":"android new factory reset qr code"},
+  "omarea.keep-phone": {"icon":"$G_KEEP","label":"Keep my phone","action":"omarea keep-phone","description":"android adopt nothing erased wireless debugging"},
+  "omarea.reapply": {"icon":"$G_REAPPLY","label":"Re-apply protection","action":"omarea reapply"},
+  "omarea.notifications": {"icon":"$G_BELL","label":"Notifications","action":"omarea notifications toggle","checked":"omarea notifications status"},
+  "omarea.doctor": {"icon":"$G_DOCTOR","label":"Check Omarea","action":"omarea doctor --terminal","description":"diagnose troubleshoot"},
+  // $END
+EOF
+}
+
+install_menu() {
+  local f=$OMA/extensions/omarchy-menu.jsonc tmp
+  mkdir -p "$OMA/extensions"
+  [ -s "$f" ] || printf '{\n}\n' > "$f"
+  drop_block "$f"
+  grep -q '^[[:space:]]*{' "$f" || return 1       # not the object we know: leave it alone
+  tmp=$(mktemp "$f.omarea.XXXXXX") || return 1
+  local entries; entries=$(menu_entries)
+  awk -v entries="$entries" '!done && /^[[:space:]]*{/ { print; print entries; done = 1; next } { print }' "$f" > "$tmp" \
+    && cat "$tmp" > "$f"; rm -f "$tmp"
+  have omarchy-shell && omarchy-shell -q omarchy.menu refresh >/dev/null 2>&1
+  return 0
+}
+
+# Hyprland keybindings, in your own bindings file (Omarchy's place for them), so they show in
+# SUPER + K with their descriptions. Skipped, with a word, if you already use the keys.
+KEY_OPEN_LUA="SUPER + CTRL + U"; KEY_FAMILY_LUA="SUPER + SHIFT + CTRL + U"
+KEY_OPEN_CONF="SUPER CTRL, U";   KEY_FAMILY_CONF="SUPER SHIFT CTRL, U"
+
+bindings_file() {
+  if [ "$1" = 4 ]; then echo "$CFG/hypr/bindings.lua"; else echo "$CFG/hypr/bindings.conf"; fi
+}
+
+# Is one of our keys already bound by you (outside our block)?
+keys_taken() {   # keys_taken FILE GEN
+  [ -f "$1" ] || return 1
+  local body; body=$(awk -v b="$BEGIN" -v e="$END" 'index($0, b) { skip = 1 } !skip && !/^[[:space:]]*(--|#)/ { print } index($0, e) { skip = 0 }' "$1")
+  if [ "$2" = 4 ]; then
+    grep -qiE "\"(SUPER \+ CTRL \+ U|CTRL \+ SUPER \+ U|SUPER \+ SHIFT \+ CTRL \+ U|SUPER \+ CTRL \+ SHIFT \+ U)\"" <<<"$body"
+  else
+    grep -qiE "^[[:space:]]*bind[a-z]*[[:space:]]*=[[:space:]]*(SUPER CTRL|CTRL SUPER|SUPER SHIFT CTRL|SUPER CTRL SHIFT)[[:space:]]*,[[:space:]]*U[[:space:]]*," <<<"$body"
+  fi
+}
+
+install_bindings() {   # install_bindings GEN
+  local f; f=$(bindings_file "$1")
+  [ -d "$CFG/hypr" ] || return 1
+  if keys_taken "$f" "$1"; then
+    say "  ! SUPER + CTRL + U is already yours in $f: Omarea's keybindings left out"
+    drop_block "$f"; return 1
+  fi
+  if [ "$1" = 4 ]; then
+    append_block "$f" <<EOF
+-- $BEGIN: added by \`omarea install\`; \`omarea uninstall\` removes it
+o.bind("$KEY_OPEN_LUA", "Omarea", "omarea toggle")
+o.bind("$KEY_FAMILY_LUA", "Omarea family", "omarea family")
+-- $END
+EOF
+  else
+    append_block "$f" <<EOF
+# $BEGIN: added by \`omarea install\`; \`omarea uninstall\` removes it
+bindd = $KEY_OPEN_CONF, Omarea, exec, omarea toggle
+bindd = $KEY_FAMILY_CONF, Omarea family, exec, omarea family
+# $END
+EOF
+  fi
+  have hyprctl && hyprctl reload >/dev/null 2>&1
+  return 0
+}
+
+# ── Omarchy 4: the shell plugin ──
+
+shell_json() { echo "$OMA/shell.json"; }
+
+# Rewrite shell.json with a jq filter (only if it's JSON we can read; atomically).
+edit_shell_json() {   # edit_shell_json FILTER [jq args...]
+  local f; f=$(shell_json)
+  [ -f "$f" ] && have jq || return 1
+  local tmp; tmp=$(mktemp "$f.omarea.XXXXXX") || return 1
+  if jq "$@" "$f" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+    cmp -s "$tmp" "$f" || cat "$tmp" > "$f"     # in place: the shell watches this file
+    rm -f "$tmp"
+    return 0
+  fi
+  rm -f "$tmp"; return 1
+}
+
+in_shell_json() {   # in_shell_json ID
+  local f; f=$(shell_json)
+  [ -f "$f" ] && have jq && jq -e --arg id "$1" '[.. | objects | select(.id? == $id)] | length > 0' "$f" >/dev/null 2>&1
+}
+
+link_plugin() {
+  [ -f "$SRC/manifest.json" ] || return 1
+  mkdir -p "$OMA/plugins"
+  local link=$OMA/plugins/$ID old=$OMA/plugins/$OLD_ID
+  # Added with `omarchy plugin add` (a git checkout)? That's the user's choice: leave it.
+  if [ -d "$link" ] && [ ! -L "$link" ]; then
+    :
+  elif [ "$(readlink "$link" 2>/dev/null)" != "$SRC" ]; then
+    rm -f "$link"; ln -s "$SRC" "$link"
+  fi
+  # The pre-Omarea plugin: its link goes (Omarea replaces it), and its place in the bar moves
+  # over to Omarea so nothing jumps.
+  [ -L "$old" ] && rm -f "$old"
+  # The old plugin was placed in the bar once already: if it isn't there now, you took it out,
+  # and Omarea respects that the same way.
+  [ -e "$MARKS/.omarchy-bar" ] && { touch "$MARKS/.omarea-bar"; rm -f "$MARKS/.omarchy-bar"; }
+  if in_shell_json "$OLD_ID"; then
+    edit_shell_json --arg old "$OLD_ID" --arg id "$ID" \
+      'walk(if type == "object" and .id? == $old then .id = $id else . end)'
+    touch "$MARKS/.omarea-bar"
+    shell_up && omarchy-shell -q shell reloadConfig >/dev/null 2>&1
+  fi
+  return 0
+}
+
+# Put Omarea in the bar: through the running shell if there is one, else in shell.json.
+enable_in_bar() {
+  in_shell_json "$ID" && return 0
+  if shell_up; then
+    omarchy-shell shell rescanPlugins >/dev/null 2>&1
+    local r; r=$(omarchy-shell shell enablePlugin "$ID" '{"section":"right","index":0}' 2>/dev/null)
+    [ "$r" = ok ] && return 0
+  fi
+  local f; f=$(shell_json)
+  [ -f "$f" ] || return 1   # no user shell.json yet: Omarchy's defaults; the next run (from the shell) adds it
+  # No right section of its own: the user is on Omarchy's default layout, which only the
+  # running shell can extend without dropping the defaults. Leave it for the next run.
+  jq -e '.bar.layout.right | type == "array"' "$f" >/dev/null 2>&1 || return 1
+  edit_shell_json --arg id "$ID" '.bar.layout.right = ([{id: $id}] + (.bar.layout.right // []))'
+}
+
+disable_plugin() {
+  if shell_up; then
+    omarchy-shell shell setPluginEnabled "$ID" false >/dev/null 2>&1
+  fi
+  # And from the file, in case the shell isn't running (a third-party plugin is enabled exactly
+  # when its id appears there).
+  in_shell_json "$ID" && edit_shell_json --arg id "$ID" '
+    (if .bar.layout then .bar.layout |= with_entries(.value |= (if type == "array" then map(select(.id? != $id)) else . end)) else . end)
+    | (if .plugins then .plugins |= map(select(.id? != $id and . != $id)) else . end)'
+  local link=$OMA/plugins/$ID
+  [ -L "$link" ] && rm -f "$link"
+  shell_up && omarchy-shell shell rescanPlugins >/dev/null 2>&1
+  return 0
+}
+
+# ── Omarchy 3: Waybar ──
+
+WAYBAR=$CFG/waybar
+
+install_waybar() {
+  local c=$WAYBAR/config.jsonc s=$WAYBAR/style.css tmp
+  [ -f "$c" ] || return 1
+  remove_waybar_quiet
+  grep -q '"modules-right"[[:space:]]*:[[:space:]]*\[' "$c" || return 1
+  tmp=$(mktemp "$c.omarea.XXXXXX") || return 1
+  # The module first in modules-right, and its definition right after the opening brace.
+  awk -v b="$BEGIN" -v e="$END" -v sig="$WAYBAR_SIGNAL" '
+    !opened && /^[[:space:]]*{/ {
+      print
+      print "  // " b ": added by `omarea install`; `omarea uninstall` removes it"
+      print "  \"custom/omarea\": {"
+      print "    \"exec\": \"omarea status --waybar\","
+      print "    \"return-type\": \"json\","
+      print "    \"interval\": 30,"
+      print "    \"signal\": " sig ","
+      print "    \"on-click\": \"omarea toggle\","
+      print "    \"on-click-middle\": \"omarea phone\","
+      print "    \"on-click-right\": \"omarea family\","
+      print "    \"tooltip\": true"
+      print "  },"
+      print "  // " e
+      opened = 1; next
+    }
+    !placed && /"modules-right"[[:space:]]*:[[:space:]]*\[/ {
+      sub(/"modules-right"[[:space:]]*:[[:space:]]*\[/, "&\"custom/omarea\", "); placed = 1
+    }
+    { print }' "$c" > "$tmp" && cat "$tmp" > "$c"; rm -f "$tmp"
+  if [ -f "$s" ]; then
+    append_block "$s" <<EOF
+/* $BEGIN: added by \`omarea install\`; \`omarea uninstall\` removes it */
+#custom-omarea {
+  min-width: 12px;
+  margin: 0 7.5px;
+}
+
+#custom-omarea.attention {
+  color: #a55555;
+}
+/* $END */
+EOF
+  fi
+  restart_waybar
+}
+
+remove_waybar_quiet() {
+  local c=$WAYBAR/config.jsonc
+  [ -f "$c" ] || return 0
+  drop_block "$c"
+  if grep -qF '"custom/omarea"' "$c"; then
+    sed -i -e 's/"custom\/omarea",[[:space:]]*//' -e 's/,[[:space:]]*"custom\/omarea"//' -e 's/"custom\/omarea"//' "$c"
+  fi
+  drop_block "$WAYBAR/style.css"
+}
+
+restart_waybar() {
+  pgrep -u "$(id -u)" -x waybar >/dev/null 2>&1 || return 0
+  # From the desktop: Omarchy's own restart. From the package (no session here): ask the
+  # running Waybar to reload its config, which needs nothing from the session.
+  if [ -n "${WAYLAND_DISPLAY:-}" ] && have omarchy-restart-waybar; then omarchy-restart-waybar >/dev/null 2>&1
+  else pkill -SIGUSR2 -u "$(id -u)" -x waybar; fi
+}
+
+# ── install / uninstall ──
+
+install() {   # install [--auto]
+  local auto=0; [ "${1:-}" = --auto ] && auto=1
+  local gen; gen=$(omarchy_gen)
+  [ "$gen" = 0 ] && { say "This isn't Omarchy: nothing to fit in (Thurea's tray, thurea-tray, is your Thurea app)."; return 0; }
+  mkdir -p "$MARKS"
+  if [ -e "$MARKS/.omarea-off" ]; then
+    [ $auto = 1 ] && return 0          # you took Omarea out: Thurea's updates respect that
+    rm -f "$MARKS/.omarea-off"
+  fi
+  say "Omarea $VERSION for Omarchy $gen"
+  if [ "$gen" = 4 ]; then
+    if link_plugin; then say "  ✓ shell plugin $ID"; else say "  ✗ the plugin isn't at $SRC (is Thurea installed?)"; fi
+    shell_up && omarchy-shell shell rescanPlugins >/dev/null 2>&1
+    # In the bar once; if you take it out of the bar later, that's respected (`omarea install`
+    # by hand puts it back).
+    if [ $auto = 0 ] || [ ! -e "$MARKS/.omarea-bar" ]; then
+      if enable_in_bar; then touch "$MARKS/.omarea-bar"; say "  ✓ in the bar (right)"
+      else say "  … the bar: added when you next log in"; fi
+    fi
+    install_menu && say "  ✓ Omarea in the Omarchy menu (SUPER + SPACE)"
+  else
+    if install_waybar; then say "  ✓ Waybar module"; else say "  ! Waybar's config.jsonc isn't Omarchy's layout: add \"custom/omarea\" yourself (omarea doctor)"; fi
+  fi
+  install_bindings "$gen" && say "  ✓ keys: SUPER + CTRL + U Omarea · SUPER + SHIFT + CTRL + U family"
+  rm -f "$STATE_DIR/check.json"
+  echo "$VERSION" > "$MARKS/.omarea-installed"
+  [ $auto = 1 ] || say "Done. Omarea follows your Omarchy theme; \`omarea doctor\` checks everything."
+  return 0
+}
+
+uninstall() {
+  local gen; gen=$(omarchy_gen)
+  disable_plugin
+  rm -f "$MARKS/.omarea-bar" "$MARKS/.omarea-installed"
+  drop_block "$OMA/extensions/omarchy-menu.jsonc"
+  have omarchy-shell && omarchy-shell -q omarchy.menu refresh >/dev/null 2>&1
+  drop_block "$CFG/hypr/bindings.lua"; drop_block "$CFG/hypr/bindings.conf"
+  have hyprctl && hyprctl reload >/dev/null 2>&1
+  remove_waybar_quiet; [ "$gen" = 3 ] && restart_waybar
+  rm -rf "$STATE_DIR"
+  mkdir -p "$MARKS"; touch "$MARKS/.omarea-off"
+  say "Omarea is out of your desktop. Thurea's protection is unchanged (it isn't part of Omarea)."
+  say "Bring Omarea back any time with: omarea install"
+}
+
+# ── doctor: everything Omarea depends on, one line each ──
+
+doctor() {
+  local fails=0 gen; gen=$(omarchy_gen)
+  ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
+  bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; fails=$((fails + 1)); }
+  note() { printf '  \033[33m!\033[0m %s\n' "$*"; }
+  echo "Omarea $VERSION"
+  if have thurea; then
+    local st; st=$(status_json)
+    ok "Thurea $(jq -r '.version // ""' <<<"$st" 2>/dev/null)"
+    case $(jq -r .state <<<"$st" 2>/dev/null) in
+      ok) ok "$(jq -r .line <<<"$st")" ;;
+      *) bad "$(jq -r .line <<<"$st") (omarea reapply)" ;;
+    esac
+  else
+    bad "Thurea isn't installed: https://github.com/ShaddickDev/thurea#install"
+  fi
+  have jq && ok "jq" || bad "jq is missing (sudo pacman -S jq)"
+  case $gen in
+    4)
+      ok "Omarchy 4 (omarchy-shell)"
+      [ -f "$SRC/manifest.json" ] && ok "plugin files in $SRC" || bad "plugin files missing from $SRC"
+      if [ -e "$OMA/plugins/$ID" ]; then ok "plugin linked in ~/.config/omarchy/plugins/$ID"; else bad "plugin not linked (omarea install)"; fi
+      if have omarchy-plugin-validate && [ -e "$OMA/plugins/$ID" ]; then
+        omarchy-plugin-validate "$OMA/plugins/$ID" >/dev/null 2>&1 && ok "plugin validates" || bad "plugin doesn't validate: omarchy plugin validate $OMA/plugins/$ID"
+      fi
+      if shell_up; then
+        ok "omarchy-shell is running"
+        if ipc status >/dev/null; then ok "Omarea answers in the bar"; else bad "Omarea isn't in the bar (omarea install)"; fi
+      else
+        note "omarchy-shell isn't running here (run this from your desktop to check the bar)"
+        in_shell_json "$ID" && ok "Omarea is in shell.json" || note "Omarea isn't in shell.json yet"
+      fi
+      has_block "$OMA/extensions/omarchy-menu.jsonc" && ok "Omarea in the Omarchy menu" || bad "not in the Omarchy menu (omarea install)"
+      have omarchy-notification-send && ok "Omarchy notifications" || note "omarchy-notification-send missing: notifications go through notify-send"
+      ;;
+    3)
+      ok "Omarchy 3 (Waybar)"
+      grep -qF '"custom/omarea"' "$WAYBAR/config.jsonc" 2>/dev/null && ok "Waybar module" || bad "not in Waybar (omarea install)"
+      pgrep -x waybar >/dev/null 2>&1 && ok "Waybar is running" || note "Waybar isn't running"
+      have notify-send && ok "notifications (notify-send)" || note "notify-send missing: no notifications"
+      ;;
+    *) note "not Omarchy: Omarea leaves this desktop alone (thurea-tray is your Thurea app)" ;;
+  esac
+  if [ "$gen" != 0 ]; then
+    local bf; bf=$(bindings_file "$gen")
+    if [ ! -d "$CFG/hypr" ]; then note "no ~/.config/hypr: no keybindings"
+    elif has_block "$bf"; then ok "keys: SUPER + CTRL + U, SUPER + SHIFT + CTRL + U"
+    elif keys_taken "$bf" "$gen"; then note "SUPER + CTRL + U is bound to something else in $bf"
+    else bad "keybindings missing (omarea install)"; fi
+    local colors=""
+    for c in "$HOME/.local/state/omarchy/current/theme/colors.toml" "$OMA/current/theme/colors.toml"; do
+      [ -f "$c" ] && { colors=$c; break; }
+    done
+    [ -n "$colors" ] && ok "theme colours: $(cat "$HOME/.local/state/omarchy/current/theme.name" "$OMA/current/theme.name" 2>/dev/null | head -n1)" \
+      || note "no Omarchy colors.toml: the family centre uses its own light/dark colours"
+    notifications_on && ok "notifications on" || note "notifications off (omarea notifications on)"
+  fi
+  [ -e "$MARKS/.omarea-off" ] && note "you uninstalled Omarea; \`omarea install\` brings it back"
+  if [ $fails = 0 ]; then echo "All good."; else echo "$fails problem(s). \`omarea install\` fixes most of them."; fi
+  [ $fails = 0 ]
+}
+
+in_terminal() {   # run "$@" in a terminal window and wait for a key
+  local cmd; printf -v cmd '%q ' "$@"
+  local wrapped="$cmd; echo; read -n 1 -s -r -p 'Press any key to close'"
+  if have xdg-terminal-exec; then setsid -f xdg-terminal-exec -e bash -c "$wrapped" >/dev/null 2>&1 </dev/null
+  elif have omarchy-launch-tui; then omarchy-launch-tui bash -c "$wrapped"
+  else "$@"; fi
+}
+
+usage() {
+  cat <<EOF
+Omarea $VERSION: Thurea, made for Omarchy.
+
+  omarea                     open Omarea (the bar panel; SUPER + CTRL + U)
+  omarea family              the family control centre (SUPER + SHIFT + CTRL + U)
+  omarea downloads           video downloads
+  omarea phone               set up a new or factory-reset Android phone
+  omarea keep-phone          set up a phone that's in use, nothing erased
+  omarea reapply             re-apply Thurea's protection now
+  omarea status [--json | --waybar]
+  omarea notifications on | off | toggle | status
+  omarea install             fit Omarea into this Omarchy (bar, menu, keys)
+  omarea uninstall           take Omarea out again (Thurea's protection stays)
+  omarea doctor              check everything Omarea needs
+EOF
+}
+
+case "${1:-toggle}" in
+  toggle|open) open_omarea toggle "" ;;
+  close) ipc close ;;
+  family) family "" ;;
+  downloads) family downloads ;;
+  phone|setup-phone) open_omarea setupPhone "#reset" ;;
+  keep-phone|keep) open_omarea keepPhone "#keep" ;;
+  settings) open_omarea settings "" ;;
+  reapply) reapply ;;
+  status)
+    case "${2:-}" in
+      --waybar) check; waybar_status ;;
+      --json) status_json ;;
+      *) jq -r '.line // "Thurea isn'"'"'t installed"' <<<"$(status_json)" ;;
+    esac ;;
+  check) check ;;
+  notifications)
+    mkdir -p "$MARKS"
+    case "${2:-status}" in
+      on) sed -i '/^notifications=/d' "$MARKS/omarea.conf" 2>/dev/null; echo "Omarea notifications on" ;;
+      off) sed -i '/^notifications=/d' "$MARKS/omarea.conf" 2>/dev/null; echo notifications=off >> "$MARKS/omarea.conf"; echo "Omarea notifications off" ;;
+      toggle) if notifications_on; then "$0" notifications off; else "$0" notifications on; fi ;;
+      status) notifications_on ;;
+      *) usage >&2; exit 2 ;;
+    esac ;;
+  install) shift; install "$@" ;;
+  uninstall|remove) uninstall ;;
+  doctor)
+    if [ "${2:-}" = --terminal ]; then in_terminal "$0" doctor; else doctor; fi ;;
+  version|--version) echo "omarea $VERSION" ;;
+  help|-h|--help) usage ;;
+  *) usage >&2; exit 2 ;;
+esac

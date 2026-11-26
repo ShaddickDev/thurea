@@ -36,7 +36,7 @@ echo "$VER" > "$C/VERSION"
 sed -i -E "0,/^version = \"[0-9.]+\"/s//version = \"$VER\"/" "$R/Cargo.toml"
 # The Omarchy plugin's manifest, and the copy at the repository root that lets
 # `omarchy plugin add https://github.com/ShaddickDev/thurea.git` install it.
-python3 - "$R/linux/omarchy-plugin/thurea/manifest.json" "$R/manifest.json" "$VER" <<'PY'
+python3 - "$R/linux/omarchy-plugin/omarea/manifest.json" "$R/manifest.json" "$VER" <<'PY'
 import json, sys
 for p in sys.argv[1:3]:
     m = json.load(open(p)); m["version"] = sys.argv[3]

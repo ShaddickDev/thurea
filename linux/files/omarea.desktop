@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Omarea
+Comment=Thurea family protection, made for Omarchy: status, family, verse of the day
+Exec=omarea toggle
+TryExec=omarea
+Icon=omarea
+Terminal=false
+Categories=System;Security;
+Keywords=family;parental;protection;thurea;screen time;safety;
+StartupNotify=false

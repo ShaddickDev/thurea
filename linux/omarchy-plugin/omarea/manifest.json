@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "thurea.omarea",
+  "name": "Omarea",
+  "version": "1.0.0",
+  "author": "Thurea",
+  "license": "MIT",
+  "description": "Omarea: Thurea family protection made for Omarchy. Protection status, the family's requests and screen time, the verse of the day and one-scan phone setup in the bar, with Omarchy notifications when something needs a parent.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarea",
+    "description": "Thurea in the bar: whether this computer is protected, family requests waiting (a dot on the icon), each child's screen time, the verse of the day and phone setup. Click: open. Middle-click: set up a phone. Keys in the panel: F family, D downloads, P phone, R re-apply, S settings.",
+    "category": "Status",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

@@ -1,6 +1,6 @@
 //! `thurea-tray`: Thurea's tray icon on Linux desktops other than Omarchy (KDE, GNOME with the
-//! AppIndicator extension, Xfce, Sway with a tray...). On Omarchy the Thurea bar plugin does this
-//! job, so the tray exits at once there.
+//! AppIndicator extension, Xfce, Sway with a tray, Omarchy 3's Waybar...). On Omarchy 4 Omarea, the
+//! Thurea shell plugin, does this job, so the tray exits at once there.
 //!
 //! The icon shows whether this computer is protected. Its window is a page on this computer
 //! only (127.0.0.1, at a random secret path) opened in the browser: the logo drawing itself,
@@ -48,8 +48,14 @@ fn thurea_json(args: &[&str]) -> serde_json::Value {
     thurea(args).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::json!({}))
 }
 
+/// Omarchy 4 and later: omarchy-shell draws the bar, and Omarea (Thurea's shell plugin) is the
+/// tray there. Omarchy 3 sets OMARCHY_PATH too, but its bar is Waybar, whose tray shows this one.
 fn on_omarchy() -> bool {
-    std::env::var_os("OMARCHY_PATH").is_some() || std::path::Path::new("/usr/share/omarchy/shell").is_dir()
+    use std::path::PathBuf;
+    let shell = |base: PathBuf| base.join("shell/shell.qml").is_file();
+    std::env::var_os("OMARCHY_PATH").is_some_and(|p| shell(PathBuf::from(p)))
+        || shell(PathBuf::from("/usr/share/omarchy"))
+        || std::env::var_os("HOME").is_some_and(|h| shell(PathBuf::from(h).join(".local/share/omarchy")))
 }
 
 fn open_window(app: &App, anchor: &str) {

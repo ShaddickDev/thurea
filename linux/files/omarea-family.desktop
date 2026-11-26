@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Omarea Family
+Comment=Thurea's family control centre: requests, screen time, pause and lock
+Exec=omarea family
+TryExec=omarea
+Icon=omarea
+Terminal=false
+Categories=System;Security;
+Keywords=parental;children;kids;screen time;approve;thurea;
+StartupNotify=false

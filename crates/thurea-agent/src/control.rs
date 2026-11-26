@@ -303,6 +303,8 @@ fn handle(c: TcpStream, port: u16, token: &str, changes: &Mutex<()>) -> bool {
             v["now"] = json!(thurea_core::now());
             respond(c, "200 OK", "application/json", v.to_string().as_bytes())
         }
+        // The Omarchy theme's colours, so the page matches the desktop and follows theme switches.
+        ("GET", "/api/theme") => respond(c, "200 OK", "application/json", omarchy_theme().to_string().as_bytes()),
         // Video downloads: the same list as the browser extension's (see downloads.rs).
         ("GET", "/api/downloads") => {
             let v = json!({ "jobs": crate::downloads::jobs(), "folder": crate::downloads::save_dir() });
@@ -334,6 +336,61 @@ fn handle(c: TcpStream, port: u16, token: &str, changes: &Mutex<()>) -> bool {
         _ => respond(c, "404 Not Found", "text/plain", b"not found"),
     }
     true
+}
+
+/// The current Omarchy theme (Omarchy 4 keeps it in ~/.local/state, Omarchy 3 in ~/.config):
+/// its name and the `key = "#rrggbb"` colours of its colors.toml, or `{}` off Omarchy. The page
+/// asks every few seconds and recolours itself when `stamp` changes.
+fn omarchy_theme() -> Value {
+    #[cfg(not(windows))]
+    {
+        let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+        let state = std::env::var_os("XDG_STATE_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join(".local/state"));
+        let config = std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
+        for current in [state.join("omarchy/current"), config.join("omarchy/current")] {
+            if let Some(v) = theme_from(&current) {
+                return v;
+            }
+        }
+    }
+    json!({})
+}
+
+#[cfg(not(windows))]
+fn theme_from(current: &std::path::Path) -> Option<Value> {
+    let file = current.join("theme/colors.toml");
+    let text = std::fs::read_to_string(&file).ok()?;
+    let colors = theme_colors(&text);
+    if !colors.contains_key("background") || !colors.contains_key("foreground") {
+        return None;
+    }
+    let stamp = std::fs::metadata(&file).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis() as u64);
+    let name = std::fs::read_to_string(current.join("theme.name")).unwrap_or_default().trim().to_string();
+    let light = current.join("theme/light.mode").exists();
+    Some(json!({ "name": name, "stamp": stamp, "light": light, "colors": colors }))
+}
+
+/// `key = "#rrggbb"` lines (comments, tables and anything that isn't a hex colour ignored);
+/// `mode = "dark" | "light"` kept as it is.
+fn theme_colors(text: &str) -> serde_json::Map<String, Value> {
+    let mut out = serde_json::Map::new();
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('#') || line.starts_with('[') {
+            continue;
+        }
+        let Some((k, v)) = line.split_once('=') else { continue };
+        let (k, v) = (k.trim(), v.trim());
+        let v = match v.strip_prefix('"') {
+            Some(rest) => rest.split('"').next().unwrap_or(""),
+            None => v.split_whitespace().next().unwrap_or(""),
+        };
+        let hex = v.len() == 7 && v.starts_with('#') && v[1..].chars().all(|c| c.is_ascii_hexdigit());
+        let key = !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if key && (hex || (k == "mode" && matches!(v, "dark" | "light"))) {
+            out.insert(k.to_string(), json!(v.to_ascii_lowercase()));
+        }
+    }
+    out
 }
 
 fn s<'a>(v: &'a Value, k: &str) -> &'a str {
@@ -476,6 +533,16 @@ fn elevated(args: &[&str]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn omarchy_theme_colours() {
+        let c = theme_colors("# Tokyo Night\nmode = \"dark\"\naccent = \"#7AA2F7\" # blue\nbackground = \"#1a1b26\"\n[extra]\nfont = \"Mono\"\ncolor1 = #f7768e\nbad = \"#12\"\n");
+        assert_eq!(c["accent"], "#7aa2f7");
+        assert_eq!(c["background"], "#1a1b26");
+        assert_eq!(c["color1"], "#f7768e");
+        assert_eq!(c["mode"], "dark");
+        assert!(!c.contains_key("font") && !c.contains_key("bad"));
+    }
 
     #[test]
     fn names() {

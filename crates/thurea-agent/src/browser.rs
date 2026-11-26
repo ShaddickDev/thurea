@@ -42,8 +42,16 @@ fn home() -> Value {
     })
 }
 
-fn on_omarchy() -> bool {
-    !cfg!(windows) && (std::env::var_os("OMARCHY_PATH").is_some() || std::path::Path::new("/usr/share/omarchy/shell").is_dir())
+/// Omarchy 4 and later, where omarchy-shell draws the bar and Omarea (Thurea's shell plugin) is
+/// the tray. Omarchy 3 (Waybar) also sets OMARCHY_PATH but has no shell: thurea-tray serves it.
+pub(crate) fn on_omarchy() -> bool {
+    if cfg!(windows) {
+        return false;
+    }
+    let shell = |base: PathBuf| base.join("shell/shell.qml").is_file();
+    std::env::var_os("OMARCHY_PATH").is_some_and(|p| shell(PathBuf::from(p)))
+        || shell(PathBuf::from("/usr/share/omarchy"))
+        || std::env::var_os("HOME").is_some_and(|h| shell(PathBuf::from(h).join(".local/share/omarchy")))
 }
 
 fn tray_kind() -> &'static str {
@@ -126,14 +134,16 @@ fn open_tray(what: &str) -> Value {
             "reset" => "setupPhone",
             _ => "open",
         };
-        let shown = Command::new("omarchy-shell")
-            .args(["thurea.omarchy", method])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success());
-        return if shown { ok() } else { fail("Thurea isn't in the Omarchy bar. Add it with: thurea-omarchy install") };
+        // Omarea answers on its own IPC target (the plugin was `thurea.omarchy` before 1.1).
+        let shown = ["thurea.omarea", "thurea.omarchy"].iter().any(|target| {
+            Command::new("omarchy-shell")
+                .args([target, method])
+                .stdin(Stdio::null())
+                .stderr(Stdio::null())
+                .output()
+                .is_ok_and(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).trim_start().starts_with("unknown"))
+        });
+        return if shown { ok() } else { fail("Omarea isn't in the Omarchy bar. Put it back with: omarea install") };
     }
     // thurea-tray: its page, in a tab of the browser that asked. Start the tray if it isn't running.
     let anchor = match what {
