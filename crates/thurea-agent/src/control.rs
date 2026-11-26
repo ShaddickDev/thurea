@@ -89,6 +89,11 @@ pub fn run(args: &[String]) -> Result<String, String> {
         Some(u) => u,
         None => start()?,
     };
+    // --page downloads: open on that page (the extension's "Open in Thurea").
+    let url = match args.iter().position(|a| a == "--page").and_then(|i| args.get(i + 1)) {
+        Some(p) if p.chars().all(|c| c.is_ascii_lowercase()) => format!("{url}#/{p}"),
+        _ => url,
+    };
     let shown = args.iter().any(|a| a == "--no-browser") || std::env::var_os("THUREA_NO_BROWSER").is_some() || !open(&url);
     if shown {
         Ok(format!("Thurea's family control center is open at:\n  {url}\n(open it in a browser on this computer; it closes 30 minutes after the page is closed)"))
@@ -297,6 +302,21 @@ fn handle(c: TcpStream, port: u16, token: &str, changes: &Mutex<()>) -> bool {
             let mut v = family::json();
             v["now"] = json!(thurea_core::now());
             respond(c, "200 OK", "application/json", v.to_string().as_bytes())
+        }
+        // Video downloads: the same list as the browser extension's (see downloads.rs).
+        ("GET", "/api/downloads") => {
+            let v = json!({ "jobs": crate::downloads::jobs(), "folder": crate::downloads::save_dir() });
+            respond(c, "200 OK", "application/json", v.to_string().as_bytes())
+        }
+        ("POST", "/api/video") if marked => {
+            let mut body = vec![0u8; len];
+            let _ = r.read_exact(&mut body);
+            let mut v: Value = serde_json::from_slice(&body).unwrap_or_default();
+            if !matches!(v["type"].as_str(), Some("formats" | "download" | "cancel" | "forget" | "reveal")) {
+                v = json!({ "type": "" });
+            }
+            v["from"] = "thurea".into();
+            respond(c, "200 OK", "application/json", crate::downloads::reply(&v).to_string().as_bytes());
         }
         ("POST", "/api/do") if marked => {
             let mut body = vec![0u8; len];

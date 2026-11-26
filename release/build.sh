@@ -6,6 +6,7 @@
 # dist/ then holds the release (the asset names never change, so devices can always fetch
 # releases/latest/download/<name>):
 #   thurea-extension.crx       the Thurea browser extension (also inside every desktop package)
+#   thurea-extension-firefox.xpi  the same for Firefox-family browsers (signed with AMO_JWT_*)
 #   thurea-linux.pkg.tar.zst   Thurea for Linux (Arch / Omarchy pacman package)
 #   thurea-windows.zip         Thurea for Windows (Thurea\Install Thurea.cmd)
 #   thurea-android.apk         Thurea for Android
@@ -44,7 +45,7 @@ PY
 cp "$R/CREDITS.md" "$C/CREDITS.md"
 
 # ---- Extension ----
-( cd "$R/extension" && tar --exclude='host' --exclude='README.md' --exclude='bump-sw.sh' -cf - . ) | tar -xf - -C "$B/ext"
+( cd "$R/extension" && tar --exclude='host' --exclude='firefox' --exclude='README.md' --exclude='bump-sw.sh' -cf - . ) | tar -xf - -C "$B/ext"
 cp "$R/CREDITS.md" "$B/ext/CREDITS.md"
 python3 - "$B/ext/manifest.json" "$VER" <<'PY'
 import json, sys
@@ -70,6 +71,38 @@ cat > "$C/updates.xml" <<XML
 XML
 echo "   extension $ID"
 
+# The Firefox-family build (Firefox, LibreWolf, Waterfox, Zen, Floorp…): same code, Firefox's
+# manifest and background (release/firefox-ext.py). Firefox and its release-based forks only
+# install add-ons signed by Mozilla, so with AMO API keys (AMO_JWT_ISSUER / AMO_JWT_SECRET, from
+# https://addons.mozilla.org/developers/addon/api/key/) it is signed as an unlisted (self-hosted)
+# add-on; without them it is built unsigned, which only LibreWolf, Firefox ESR / Developer
+# Edition / Nightly and other builds that allow unsigned add-ons accept.
+GECKO=$(python3 -I "$R/release/firefox-ext.py" "$B/ext" "$B/ext-firefox" "$VER")
+echo "$GECKO" > "$C/firefox-id"
+XPI_NAME="thurea-firefox-$VER.xpi"; echo "$XPI_NAME" > "$C/firefox-xpi-name"
+python3 -I - "$B/ext-firefox" "$B/ext-firefox.xpi" <<'PY'
+import os, sys, zipfile
+src, out = sys.argv[1:3]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _, files in sorted(os.walk(src)):
+        for f in sorted(files):
+            p = os.path.join(root, f)
+            z.write(p, os.path.relpath(p, src))
+PY
+FIREFOX_SIGNED=false
+if [ -n "${AMO_JWT_ISSUER:-}" ] && [ -n "${AMO_JWT_SECRET:-}" ]; then
+  rm -rf "$B/amo"; mkdir -p "$B/amo"
+  npx --yes web-ext@8 sign --channel=unlisted --source-dir="$B/ext-firefox" --artifacts-dir="$B/amo" \
+      --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET" > "$B/amo.log" 2>&1 || { tail -20 "$B/amo.log"; echo "signing the Firefox add-on failed"; exit 1; }
+  cp "$(ls "$B"/amo/*.xpi | head -1)" "$C/thurea.xpi"; FIREFOX_SIGNED=true
+  echo "   firefox $GECKO (signed by Mozilla)"
+elif [ "${THUREA_REQUIRE_SIGNED:-0}" = 1 ]; then
+  echo "THUREA_REQUIRE_SIGNED=1 but AMO_JWT_ISSUER / AMO_JWT_SECRET aren't set: Firefox won't install an unsigned add-on"; exit 1
+else
+  cp "$B/ext-firefox.xpi" "$C/thurea.xpi"
+  echo "   firefox $GECKO (WARNING: unsigned; Firefox and Zen won't install it, set AMO_JWT_ISSUER / AMO_JWT_SECRET)"
+fi
+
 # ---- Shared block lists and policies ----
 { echo "# >>> thurea (Thurea blocker - managed by the system, do not edit)"
   awk '{print "0.0.0.0 " $1; if (split($1, p, ".") == 2) print "0.0.0.0 www." $1}' "$R/extension/filters/porn-domains.txt"
@@ -82,9 +115,9 @@ echo "   extension $ID"
            doh.libredns.gr dns.switch.ch doh.ffmuc.net dns.digitale-gesellschaft.ch protective.joindns4.eu unfiltered.joindns4.eu; do
     echo "0.0.0.0 $d"; done
   echo "# <<< thurea"; } > "$C/hosts-block"
-python3 - "$ID" "$C" "$R/extension/filters/porn-domains.txt" "$R/release/release-key.pub.pem" <<'PY'
+python3 - "$ID" "$C" "$R/extension/filters/porn-domains.txt" "$R/release/release-key.pub.pem" "$GECKO" "$XPI_NAME" <<'PY'
 import base64, json, subprocess, sys
-ID, out, lst, pub = sys.argv[1:5]
+ID, out, lst, pub, GECKO, XPI = sys.argv[1:7]
 pol = {
   "ExtensionInstallForcelist": [f"{ID};http://127.0.0.1:8137/updates.xml"],
   "ExtensionSettings": {
@@ -103,6 +136,13 @@ json.dump(pol, open(f"{out}/chromium-policy.json", "w"), indent=2)
 known = [l.strip() for l in open(lst) if l.strip()]
 top = [d for d in known if d.count(".") == 1][:3000]
 json.dump({"policies": {
+  # The Thurea extension, force-installed from this computer's own update server. Its address
+  # carries the version: Firefox installs again from install_url when the address changes.
+  "ExtensionSettings": {GECKO: {"installation_mode": "force_installed", "install_url": f"http://127.0.0.1:8137/{XPI}"}},
+  "3rdparty": {"Extensions": {GECKO: {"pornBlock": True}}},
+  # Builds that allow unsigned add-ons (ESR, Developer Edition, Nightly, LibreWolf…) take an
+  # unsigned release too; Firefox itself ignores this and needs the Mozilla-signed one.
+  "Preferences": {"xpinstall.signatures.required": {"Value": False, "Status": "locked"}},
   "DNSOverHTTPS": {"Enabled": True, "ProviderURL": "https://family.cloudflare-dns.com/dns-query", "Locked": True, "Fallback": False},
   "DisablePrivateBrowsing": True,
   "WebsiteFilter": {"Block": [f"*://*.{d}/*" for d in top] + [f"*://{d}/*" for d in top]}
@@ -118,6 +158,7 @@ der = subprocess.run(["openssl", "pkey", "-pubin", "-in", pub, "-outform", "DER"
 open(f"{out}/release-key.spki.b64", "w").write(base64.b64encode(der).decode())
 PY
 cp "$C/thurea.crx" "$D/thurea-extension.crx"
+cp "$C/thurea.xpi" "$D/thurea-extension-firefox.xpi"
 
 # ---- Android ----
 CODE=$(awk -F. '{print $1*10000 + $2*100 + $3}' <<< "$VER")
@@ -158,8 +199,8 @@ Package: thurea
 Version: $VER
 Architecture: amd64
 Maintainer: Thurea <https://github.com/ShaddickDev/thurea>
-Depends: systemd, e2fsprogs, python3, nftables, openssl
-Recommends: network-manager, adb
+Depends: systemd, e2fsprogs, python3, nftables, openssl, curl
+Recommends: network-manager, adb, ffmpeg
 Protected: yes
 Section: admin
 Priority: optional
@@ -186,7 +227,7 @@ cp "$B"/rpmbuild/RPMS/x86_64/thurea-"$VER"-1.x86_64.rpm "$D/thurea-linux.rpm"
 echo "== Windows"
 W=$B/windows/Thurea; mkdir -p "$W/data" "$W/web" "$W/android"
 cp -r "$R/windows/thurea/." "$W/"
-cp "$C/extension-id" "$C/chromium-policy.json" "$C/firefox-policies.json" "$C/release-key.json" "$W/data/"
+cp "$C/extension-id" "$C/firefox-id" "$C/chromium-policy.json" "$C/firefox-policies.json" "$C/release-key.json" "$W/data/"
 cp "$R/policy/verses.json" "$W/data/verses.json"
 # The Rust agent for Windows: the tray runs it for "Keep my phone" (setup without a reset).
 ( cd "$R" && PATH="$HOME/.cargo/bin:$PATH" cargo build --release -p thurea-agent --target x86_64-pc-windows-gnu ) >> "$B/rust.log" 2>&1 || { tail -20 "$B/rust.log"; echo "Windows agent build failed"; exit 1; }
@@ -201,6 +242,7 @@ else
 fi
 cp "$R/CREDITS.md" "$W/CREDITS.md"
 cp "$C/thurea.crx" "$C/updates.xml" "$W/web/"
+cp "$C/thurea.xpi" "$W/web/$XPI_NAME"
 cp "$D/thurea-android.apk" "$W/android/Thurea.apk"
 echo "$VER" > "$W/VERSION"
 find "$W" \( -name "*.ps1" -o -name "*.cs" -o -name "*.cmd" -o -name "*.md" \) -print0 | xargs -0 sed -i "s/\r\?$/\r/"
@@ -234,7 +276,8 @@ python3 - "$D" "$VER" <<'PY'
 import hashlib, json, os, sys, time
 d, v = sys.argv[1], sys.argv[2]
 files = {}
-for key, name in [("extension", "thurea-extension.crx"), ("linux", "thurea-linux.pkg.tar.zst"),
+for key, name in [("extension", "thurea-extension.crx"), ("extension-firefox", "thurea-extension-firefox.xpi"),
+                  ("linux", "thurea-linux.pkg.tar.zst"),
                   ("linux-deb", "thurea-linux.deb"), ("linux-rpm", "thurea-linux.rpm"),
                   ("windows", "thurea-windows.zip"), ("android", "thurea-android.apk")]:
     data = open(os.path.join(d, name), "rb").read()

@@ -65,6 +65,7 @@ fn check_label(id: &str) -> &str {
         "browsers" => "browser policies",
         "managed" => "browsers accept the Thurea extension",
         "extensionServer" => "extension update server",
+        "extensionInstalled" => "Thurea extension installed in every browser",
         "edgeRemoved" => "Edge removed",
         "tasks" => "Thurea's tasks",
         "uninstallBlock" => "uninstall block",

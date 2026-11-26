@@ -1,0 +1,5 @@
+#!/bin/sh
+# Thurea's video-download helper for the browser extension (native messaging, com.thurea.ytdlp):
+# what a video offers, downloads in the background, their progress. Started by the browser, as
+# the user. The same downloads show in Thurea's Downloads page and `thurea downloads`.
+exec /usr/bin/thurea video-host "$@"

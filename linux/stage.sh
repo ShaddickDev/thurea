@@ -43,12 +43,31 @@ for f in thurea.crx updates.xml hosts-block chromium-policy.json firefox-policie
 done
 inst 644 "$DATA/thurea.crx"  usr/share/thurea/web/thurea.crx
 inst 644 "$DATA/updates.xml" usr/share/thurea/web/updates.xml
-# The extension's family helper, for every Chromium-family browser.
-host=$(printf '{"name":"com.thurea.family","description":"Thurea family helper","path":"/usr/lib/thurea/thurea-family-host","type":"stdio","allowed_origins":["chrome-extension://%s/"]}' "$(cat "$DATA/extension-id")")
-for d in etc/chromium/native-messaging-hosts etc/opt/chrome/native-messaging-hosts etc/opt/edge/native-messaging-hosts etc/brave/native-messaging-hosts; do
+# The Firefox-family build (named by version: Firefox reinstalls when the address changes).
+inst 644 "$DATA/thurea.xpi"  "usr/share/thurea/web/$(cat "$DATA/firefox-xpi-name")"
+inst 644 "$DATA/firefox-id"  usr/share/thurea/firefox-id
+inst 755 "$F/thurea-video-host" usr/lib/thurea/thurea-video-host
+# The extension's helpers: family (com.thurea.family) and video downloads (com.thurea.ytdlp),
+# for every Chromium-family browser (allowed_origins) and every Firefox-family one
+# (allowed_extensions; Firefox reads /usr/lib/mozilla, and /usr/lib64/mozilla on Fedora; some forks
+# their own). Not on Arch: /usr/lib64 is a link to /usr/lib there.
+EXT=$(cat "$DATA/extension-id") GECKO=$(cat "$DATA/firefox-id")
+host() { # host NAME DESCRIPTION PATH chromium|firefox
+  if [ "$4" = chromium ]; then allow="\"allowed_origins\":[\"chrome-extension://$EXT/\"]"; else allow="\"allowed_extensions\":[\"$GECKO\"]"; fi
+  printf '{"name":"%s","description":"%s","path":"%s","type":"stdio",%s}\n' "$1" "$2" "$3" "$allow"
+}
+for d in etc/chromium/native-messaging-hosts etc/opt/chrome/native-messaging-hosts etc/opt/edge/native-messaging-hosts \
+         etc/brave/native-messaging-hosts etc/opt/brave.com/brave/native-messaging-hosts etc/opt/vivaldi/native-messaging-hosts \
+         etc/vivaldi/native-messaging-hosts etc/opt/chromium/native-messaging-hosts etc/chromium-browser/native-messaging-hosts \
+         etc/thorium/native-messaging-hosts etc/opt/thorium/native-messaging-hosts \
+         usr/lib/mozilla/native-messaging-hosts usr/lib/librewolf/native-messaging-hosts \
+         usr/lib/waterfox/native-messaging-hosts usr/lib/zen-browser/native-messaging-hosts usr/lib/floorp/native-messaging-hosts \
+         $([ "$FLAVOR" = rpm ] && echo usr/lib64/mozilla/native-messaging-hosts); do
+  kind=chromium; case $d in usr/*) kind=firefox ;; esac
   install -dm755 "$D/$d"
-  printf '%s\n' "$host" > "$D/$d/com.thurea.family.json"
-  chmod 644 "$D/$d/com.thurea.family.json"
+  host com.thurea.family "Thurea family helper" /usr/lib/thurea/thurea-family-host $kind > "$D/$d/com.thurea.family.json"
+  host com.thurea.ytdlp "Thurea video downloads" /usr/lib/thurea/thurea-video-host $kind > "$D/$d/com.thurea.ytdlp.json"
+  chmod 644 "$D/$d"/com.thurea.*.json
 done
 
 case $FLAVOR in

@@ -269,9 +269,65 @@ function Set-ChromiumPolicy([string]$key) {
     $c = (Set-Reg $key 'BrowserGuestModeEnabled' 0 'DWord') -or $c
     return $c
 }
+# When Thurea last changed a browser policy: profiles used after that (plus a grace period)
+# must have the extension (see Test-ExtensionInstalled).
+function Set-Since([string]$what) {
+    New-Item -ItemType Directory -Force -Path $State | Out-Null
+    [IO.File]::WriteAllText((Join-Path $State "policy-$what.since"), (Get-Date).ToString('o'))
+}
+function Get-Since([string]$what) {
+    $f = Join-Path $State "policy-$what.since"
+    if (-not (Test-Path $f)) { Set-Since $what }
+    return (Get-Item $f).LastWriteTime
+}
+
+# Is the Thurea extension really there? Every browser profile (Chromium family: <profile>\Extensions\<id>,
+# Firefox family: <profile>\extensions\<add-on id>.xpi) used in the last 30 days, and since Thurea set
+# the policy (10 minutes' grace, so the browser has seen it), must have it. Returns the ones without.
+function Test-ExtensionInstalled {
+    $ext = (Get-Content (Join-Path $Data 'extension-id') -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $gecko = (Get-Content (Join-Path $Data 'firefox-id') -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $chSince = (Get-Since 'chromium').AddMinutes(10); $ffSince = (Get-Since 'firefox').AddMinutes(10)
+    $recent = (Get-Date).AddDays(-30)
+    $chromium = @('Google\Chrome', 'Google\Chrome Beta', 'Microsoft\Edge', 'BraveSoftware\Brave-Browser', 'Vivaldi', 'Chromium', 'imput\Helium', 'Thorium', 'Yandex\YandexBrowser')
+    $firefox = @('Mozilla\Firefox', 'LibreWolf', 'Waterfox', 'zen', 'Floorp')
+    $missing = New-Object System.Collections.Generic.List[string]
+    foreach ($u in Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue) {
+        if ($ext) {
+            foreach ($b in $chromium) {
+                foreach ($p in Get-ChildItem (Join-Path $u.FullName "AppData\Local\$b\User Data") -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'Default' -or $_.Name -like 'Profile *' }) {
+                    $pref = Get-Item (Join-Path $p.FullName 'Preferences') -ErrorAction SilentlyContinue
+                    if (-not $pref -or $pref.LastWriteTime -lt $recent -or $pref.LastWriteTime -lt $chSince) { continue }
+                    if (-not (Test-Path (Join-Path $p.FullName "Extensions\$($ext.Trim())"))) { $missing.Add($p.FullName) }
+                }
+            }
+        }
+        if ($gecko) {
+            foreach ($b in $firefox) {
+                foreach ($p in Get-ChildItem (Join-Path $u.FullName "AppData\Roaming\$b\Profiles") -Directory -ErrorAction SilentlyContinue) {
+                    $pref = Get-Item (Join-Path $p.FullName 'prefs.js') -ErrorAction SilentlyContinue
+                    if (-not $pref -or $pref.LastWriteTime -lt $recent -or $pref.LastWriteTime -lt $ffSince) { continue }
+                    if (-not (Test-Path (Join-Path $p.FullName "extensions\$($gecko.Trim()).xpi"))) { $missing.Add($p.FullName) }
+                }
+            }
+        }
+    }
+    return , $missing.ToArray()
+}
+
 function Set-Browsers {
+    # Optional, and the sturdier way for Chrome: Chrome Browser Cloud Management (free, from a
+    # Google Admin console). An enrolled Chrome accepts the Thurea extension without relying on
+    # the managed marker. Put the enrollment token in ProgramData\Thurea\chrome-enrollment-token.
+    $tokenFile = Join-Path $State 'chrome-enrollment-token'
+    if (Test-Path $tokenFile) {
+        $token = (Get-Content $tokenFile -Raw).Trim()
+        if ($token -match '^[A-Za-z0-9-]{20,80}$' -and (Set-Reg 'SOFTWARE\Policies\Google\Chrome' 'CloudManagementEnrollmentToken' $token 'String')) {
+            Log 'browsers: Chrome enrolled in Chrome Browser Cloud Management'
+        }
+    }
     foreach ($b in $Chromium.GetEnumerator()) {
-        if (Set-ChromiumPolicy $b.Value) { Log "browsers: $($b.Key) policy set" }
+        if (Set-ChromiumPolicy $b.Value) { Log "browsers: $($b.Key) policy set"; Set-Since 'chromium' }
     }
     # Firefox family: policies.json beside every installed copy (a registry policy would make Firefox
     # ignore policies.json, and the 37,000-site filter is too big for the registry).
@@ -294,7 +350,7 @@ function Set-Browsers {
         if ($cur -ne $ff) {
             New-Item -ItemType Directory -Force -Path (Split-Path $f) | Out-Null
             [IO.File]::WriteAllText($f, $ff, (New-Object Text.UTF8Encoding $false))
-            Log "browsers: Firefox-family policy written to $f"
+            Log "browsers: Firefox-family policy written to $f"; Set-Since 'firefox' 
         }
     }
     # Browsers that may not run.
@@ -342,11 +398,13 @@ function Write-Status {
     $checks.browsers = -not ($Chromium.Values | Where-Object { (Get-Reg $_ 'DnsOverHttpsMode') -ne 'secure' })
     $checks.managed = Test-Managed
     $checks.extensionServer = Test-Server
+    $missing = @(Test-ExtensionInstalled)
+    $checks.extensionInstalled = $missing.Count -eq 0
     if (Test-Path (Join-Path $State 'remove-edge')) { $checks.edgeRemoved = -not (Test-Path "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe") }
     $checks.tasks = Test-Tasks
     $checks.uninstallBlock = (Get-Reg 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Thurea' 'NoRemove') -eq 1
     $ok = -not ($checks.Values | Where-Object { -not $_ })
-    $s = [ordered]@{ protected = $ok; checks = $checks; at = (Get-Date).ToString('o'); epoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); version = [string]("$(Get-Content (Join-Path $Home_ 'VERSION') -ErrorAction SilentlyContinue | Select-Object -First 1)".Trim()) }
+    $s = [ordered]@{ protected = $ok; checks = $checks; extensionMissing = @($missing | Select-Object -First 20); at = (Get-Date).ToString('o'); epoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); version = [string]("$(Get-Content (Join-Path $Home_ 'VERSION') -ErrorAction SilentlyContinue | Select-Object -First 1)".Trim()) }
     New-Item -ItemType Directory -Force -Path $State | Out-Null
     [IO.File]::WriteAllText((Join-Path $State 'status.json'), ($s | ConvertTo-Json -Depth 3), (New-Object Text.UTF8Encoding $false))
     return $s
@@ -369,10 +427,11 @@ function Invoke-Apply {
     }
     $st = Write-Status
     if (-not $st.protected) { Log ("not fully protected: " + (($st.checks.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object Key) -join ', ')) }
+    if ($st.extensionMissing.Count) { Log ("Thurea extension not installed in: " + ($st.extensionMissing -join '; ')) }
 }
 
 function Invoke-Serve {
-    $types = @{ '.xml' = 'text/xml'; '.crx' = 'application/x-chrome-extension'; '.json' = 'application/json' }
+    $types = @{ '.xml' = 'text/xml'; '.crx' = 'application/x-chrome-extension'; '.xpi' = 'application/x-xpinstall'; '.json' = 'application/json' }
     $l = New-Object System.Net.HttpListener
     $l.Prefixes.Add("http://127.0.0.1:$Port/")
     $l.Start()
@@ -518,20 +577,35 @@ function Set-StartMenu {
     }
 }
 
-# The browser extension's family helper (native messaging): tells the extension whether the
-# signed-in account is a child's. Registered for Chrome, Chromium, Edge and Brave.
+# The browser extension's helpers (native messaging): the family helper (com.thurea.family: is the
+# signed-in account a child's) and video downloads (com.thurea.ytdlp: the same downloads as
+# Thurea's Downloads page). Registered for every Chromium-family browser (allowed_origins: the
+# extension's ID) and every Firefox-family one (allowed_extensions: its add-on ID).
+$ChromiumHostKeys = @('Google\Chrome', 'Chromium', 'Microsoft\Edge', 'BraveSoftware\Brave-Browser', 'Vivaldi', 'Thorium', 'Helium', 'Yandex\YandexBrowser')
+$FirefoxHostKeys = @('Mozilla', 'LibreWolf', 'Waterfox', 'Zen', 'Floorp')
 function Set-FamilyHost {
-    $cmd = Join-Path $Home_ 'family-host.cmd'
-    Set-Content -Path $cmd -Value "@`"%~dp0thurea.exe`" family-host %*" -Encoding ASCII
     $id = (Get-Content (Join-Path $Home_ 'data\extension-id') -ErrorAction SilentlyContinue | Select-Object -First 1)
-    if (-not $id) { return }
-    $json = Join-Path $Home_ 'family-host.json'
-    $m = @{ name = 'com.thurea.family'; description = 'Thurea family helper'; path = $cmd; type = 'stdio'; allowed_origins = @("chrome-extension://$($id.Trim())/") } | ConvertTo-Json
-    Set-Content -Path $json -Value $m -Encoding UTF8
-    foreach ($b in 'Google\Chrome', 'Chromium', 'Microsoft\Edge', 'BraveSoftware\Brave-Browser') {
-        $k = "HKLM:\SOFTWARE\$b\NativeMessagingHosts\com.thurea.family"
-        New-Item -Path $k -Force | Out-Null
-        Set-ItemProperty -Path $k -Name '(default)' -Value $json
+    $gecko = (Get-Content (Join-Path $Home_ 'data\firefox-id') -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $hosts = @(@{ name = 'com.thurea.family'; file = 'family-host'; arg = 'family-host'; what = 'Thurea family helper' },
+               @{ name = 'com.thurea.ytdlp'; file = 'video-host'; arg = 'video-host'; what = 'Thurea video downloads' })
+    foreach ($h in $hosts) {
+        $cmd = Join-Path $Home_ "$($h.file).cmd"
+        Set-Content -Path $cmd -Value "@`"%~dp0thurea.exe`" $($h.arg) %*" -Encoding ASCII
+        $sets = @()
+        if ($id) { $sets += , @('', @{ allowed_origins = @("chrome-extension://$($id.Trim())/") }, $ChromiumHostKeys) }
+        if ($gecko) { $sets += , @('-firefox', @{ allowed_extensions = @($gecko.Trim()) }, $FirefoxHostKeys) }
+        foreach ($set in $sets) {
+            $m = [ordered]@{ name = $h.name; description = $h.what; path = $cmd; type = 'stdio' }
+            foreach ($kv in $set[1].GetEnumerator()) { $m[$kv.Key] = $kv.Value }
+            $json = Join-Path $Home_ "$($h.file)$($set[0]).json"
+            # No byte-order mark: not every browser's JSON reader skips one.
+            [IO.File]::WriteAllText($json, ($m | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
+            foreach ($b in $set[2]) {
+                $k = "HKLM:\SOFTWARE\$b\NativeMessagingHosts\$($h.name)"
+                New-Item -Path $k -Force | Out-Null
+                Set-ItemProperty -Path $k -Name '(default)' -Value $json
+            }
+        }
     }
 }
 

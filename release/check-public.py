@@ -15,7 +15,7 @@ PRIVATE_PATH = re.compile(
     rb"(^|[/\\])(thurea(-guard)?[-_ ]pass(\.[a-z]+)?|porn[-_ ]?pass(\.[a-z]+)?|"
     rb"pass(-state)?\.json|chromium-policy-pass\.json)([/\\]|$)", re.IGNORECASE
 )
-ARCHIVE_SUFFIXES = (".zip", ".crx", ".apk", ".tar.zst", ".deb", ".rpm", ".tar.xz", ".tar.gz")
+ARCHIVE_SUFFIXES = (".zip", ".crx", ".xpi", ".apk", ".tar.zst", ".deb", ".rpm", ".tar.xz", ".tar.gz")
 PRIVATE_CODE = (
     r"""pbPass|PB_PASS|PASS_URL_RE|porn[:_ ]pass|["']porn-pass["']|pass\.json|"""
     r"Thurea( Guard)? pass[[:space:]:]|chromium-policy-pass|id=.tabAdult"
@@ -43,7 +43,7 @@ def check_tree(commit):
 def check_artifact(name, data):
     if PRIVATE_PATH.search(name.encode(errors="surrogateescape")):
         raise ValueError(name)
-    if name.lower().endswith((".zip", ".crx", ".apk")):
+    if name.lower().endswith((".zip", ".crx", ".xpi", ".apk")):
         # Python's ZIP reader also handles the CRX header prepended to Chromium extensions.
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for member in archive.infolist():

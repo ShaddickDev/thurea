@@ -194,38 +194,45 @@ const askHost = msg => new Promise(resolve => {
   });
 });
 
+const HOST_MISSING = "Thurea's video downloader isn't on this computer. It comes with Thurea for Windows and Linux.";
+
+// Every resolution the video comes in (as Thurea's downloader reports it), then Audio.
+async function showQualities(box, url, title) {
+  box.hidden = false;
+  box.replaceChildren(Object.assign(document.createElement("div"), { className: "empty", textContent: "Checking available resolutions…" }));
+  const info = await askHost({ type: "formats", url });
+  box.replaceChildren();
+  if (!info || info.error) {
+    box.style.display = "block";
+    box.append(Object.assign(document.createElement("div"), {
+      className: "empty",
+      textContent: !info || info.missing ? HOST_MISSING : "Couldn't read this video: " + info.error
+    }));
+    return;
+  }
+  // Newer helpers say the frame rate too ("1080p60"); older ones only the heights.
+  const formats = info.formats || (info.heights || []).map(h => ({ height: h, label: h >= 2160 ? "4K" : h + "p" }));
+  const choices = [...formats.filter(f => f.height >= 144).map(f => [String(f.height), f.label]), ["audio", "Audio (MP3)"]];
+  for (const [quality, label] of choices) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (quality === choices[0][0]) b.className = "primary";
+    b.onclick = async () => {
+      b.disabled = true;
+      const r = await askHost({ type: "download", url, quality, title: info.title || title, from: "browser" });
+      b.disabled = false;
+      if (r.error) alertJob(r.missing ? HOST_MISSING : r.error);
+      document.getElementById("dlGroup").open = true;
+      refreshJobs();
+    };
+    box.append(b);
+  }
+}
+
 async function setupYouTube(url, tabTitle) {
-  const q = document.getElementById("ytQualities");
   const title = tabTitle.replace(/ - YouTube$/, "");
   document.getElementById("ytTitle").textContent = title;
-
-  const info = await askHost({ type: "formats", url });
-  q.replaceChildren();
-  if (info.error) {
-    q.style.display = "block";
-    q.append(Object.assign(document.createElement("div"), {
-      className: "empty",
-      textContent: info.missing
-        ? "The YouTube downloader helper isn't installed or can't start (needs yt-dlp)."
-        : "Couldn't read this video: " + info.error
-    }));
-  } else {
-    const choices = [...info.heights.filter(h => h >= 144).slice(0, 8).map(h => [String(h), h >= 2160 ? "4K" : h >= 1440 ? "1440p" : h + "p"]), ["audio", "Audio (MP3)"]];
-    for (const [quality, label] of choices) {
-      const b = document.createElement("button");
-      b.textContent = label;
-      if (quality === choices[0][0]) b.className = "primary";
-      b.onclick = async () => {
-        b.disabled = true;
-        const r = await askHost({ type: "download", url, quality, title: info.title || title });
-        b.disabled = false;
-        if (r.error) alertJob(r.error);
-        document.getElementById("dlGroup").open = true;
-        refreshJobs();
-      };
-      q.append(b);
-    }
-  }
+  await showQualities(document.getElementById("ytQualities"), url, title);
 }
 
 function alertJob(text) {
@@ -235,29 +242,43 @@ function alertJob(text) {
   box.firstChild.firstChild.textContent = text;
 }
 
+const baseName = p => String(p || "").split(/[\\/]/).pop();
+const smallButton = (text, on) => {
+  const b = Object.assign(document.createElement("button"), { textContent: text });
+  b.style.cssText = "padding:2px 8px;font-size:11px;margin-left:6px";
+  b.onclick = e => { e.preventDefault(); b.disabled = true; on(); };
+  return b;
+};
+
+// The same list as Thurea's Downloads page: a download started there shows here, and the other way.
 async function refreshJobs() {
   const r = await askHost({ type: "jobs" });
   if (!r || !r.jobs) return;
   const box = document.getElementById("dlJobs");
   box.replaceChildren();
   if (!r.jobs.length) box.innerHTML = '<div class="empty">No downloads yet.</div>';
-  if (r.jobs.some(j => j.state !== "done" && j.state !== "failed")) document.getElementById("dlGroup").open = true;
+  const running = j => !["done", "failed", "cancelled"].includes(j.state);
+  if (r.jobs.some(running)) document.getElementById("dlGroup").open = true;
   for (const j of r.jobs.slice(0, 4)) {
     const row = document.createElement("div");
     row.className = "job";
     const label = (j.playlist ? "📃 " : "") + (j.quality === "audio" ? "MP3" : j.quality === "best" ? "Best" : j.quality + "p");
     let status, cls = "s";
-    if (j.state === "done") { status = "✓ Saved: " + (j.file || "").split("/").pop(); cls += " done"; }
+    if (j.state === "done") { status = "✓ Saved: " + (j.name || baseName(j.file)); cls += " done"; }
     else if (j.state === "failed") { status = "Failed: " + (j.error || "unknown error"); cls += " err"; }
+    else if (j.state === "cancelled") { status = "Cancelled"; cls += " err"; }
     else if (j.state === "converting") status = "Joining video and audio…";
+    else if (j.state === "preparing") status = "Getting the downloader ready…";
     else if (j.state === "queued") status = "Starting…";
     else status = (j.item ? `Item ${j.item} · ` : "") + `${(j.percent || 0).toFixed(1)}%` + (j.part > 1 && !j.playlist ? " (audio)" : "") + (j.speed ? ` · ${j.speed}` : "") + (j.eta ? ` · ${j.eta} left` : "");
     row.innerHTML = '<div class="t"></div><div></div><div class="pbar"><div></div></div>';
     row.querySelector(".t").textContent = `${label} · ${j.title || j.url}`;
     row.children[1].className = cls;
     row.children[1].textContent = status;
+    if (running(j)) row.children[1].append(smallButton("Cancel", () => askHost({ type: "cancel", job: j.id }).then(refreshJobs)));
+    if (j.state === "done") row.children[1].append(smallButton("Show", () => askHost({ type: "reveal", job: j.id })));
     row.querySelector(".pbar div").style.width = (j.state === "done" ? 100 : j.percent || 0) + "%";
-    if (j.state === "done" || j.state === "failed") row.querySelector(".pbar").remove();
+    if (!running(j)) row.querySelector(".pbar").remove();
     box.append(row);
   }
 }
@@ -385,9 +406,9 @@ async function setupExtras(tab) {
   document.getElementById("dlPlaylist").hidden = !isPlaylist;
   const send = (quality, playlist) => async e => {
     e.target.disabled = true;
-    const r = await askHost({ type: "download", url: tab.url, quality, title: tab.title || "", playlist });
+    const r = await askHost({ type: "download", url: tab.url, quality, title: tab.title || "", playlist, from: "browser" });
     e.target.disabled = false;
-    if (r && r.error) alertJob(r.missing ? "Thurea's download helper isn't installed (needs yt-dlp)." : r.error);
+    if (r && r.error) alertJob(r.missing ? HOST_MISSING : r.error);
     refreshJobs();
   };
   // Twitch: only past broadcasts (VODs), never live streams.
@@ -401,6 +422,12 @@ async function setupExtras(tab) {
   document.getElementById("dlVideo").onclick = send("best", false);
   document.getElementById("dlAudio").onclick = send("audio", false);
   document.getElementById("dlPlaylist").onclick = send("best", true);
+  document.getElementById("dlPick").onclick = () => showQualities(document.getElementById("dlQualities"), tab.url, tab.title || "");
+  if (onTwitch && !twitchVod) document.getElementById("dlPick").disabled = true;
+  document.getElementById("dlOpenThurea").onclick = e => {
+    e.preventDefault();
+    chrome.runtime.sendNativeMessage("com.thurea.family", { type: "open", what: "downloads" }, () => void chrome.runtime.lastError);
+  };
   refreshJobs();
   setInterval(refreshJobs, 1000);
 }

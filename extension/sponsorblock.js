@@ -18,14 +18,15 @@
   let settings = { ...DEFAULTS };
   let videoId = null, segments = [], undone = new Set(), video = null;
 
+  // Watch pages, Shorts, live replays and embedded players (youtube-nocookie too).
   const currentId = () => {
-    if (location.pathname !== "/watch") return null;
-    const v = new URLSearchParams(location.search).get("v");
+    const v = location.pathname === "/watch" ? new URLSearchParams(location.search).get("v")
+      : (location.pathname.match(/^\/(?:shorts|live|embed)\/([\w-]{11})/) || [])[1];
     return v && /^[\w-]{11}$/.test(v) ? v : null;
   };
 
-  async function load(id) {
-    segments = []; undone = new Set(); drawBar();
+  async function load(id, attempt = 0) {
+    if (!attempt) { segments = []; undone = new Set(); drawBar(); }
     if (!id || !settings.sponsorSkip || !settings.sponsorCategories.length) return;
     const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id)))]
       .map(b => b.toString(16).padStart(2, "0")).join("");
@@ -33,18 +34,28 @@
     try {
       // Fetched by Thurea's background (YouTube's page blocks this request
       // from content scripts: "Unsafe attempt to load URL").
-      const list = await safeSend({ type: "sb:segments", url: API + hash.slice(0, 4) + q });
-      if (!Array.isArray(list)) return;       // none for any video with this prefix, or the lookup failed
-      const entry = list.find(v => v.videoID === id);
+      const r = await safeSend({ type: "sb:segments", url: API + hash.slice(0, 4) + q });
       if (id !== videoId) return;             // navigated away meanwhile
+      // Older background: the list itself (null for none or failed).
+      const res = Array.isArray(r) ? { ok: true, list: r } : r || { ok: false };
+      if (!res.ok) {
+        // Network trouble or the server busy: try again a little later (3 tries).
+        if (attempt < 2) setTimeout(() => id === videoId && load(id, attempt + 1), 3000 * (attempt + 1));
+        return;
+      }
+      const entry = (res.list || []).find(v => v.videoID === id);
       segments = (entry ? entry.segments : [])
         .filter(s => s.actionType === "skip" && s.segment[1] - s.segment[0] > 0.5)
-        .map(s => ({ start: s.segment[0], end: s.segment[1], category: s.category, uuid: s.UUID }));
+        .map(s => ({ start: s.segment[0], end: s.segment[1], category: s.category, uuid: s.UUID, videoDuration: s.videoDuration || 0 }));
       drawBar();
     } catch {}
   }
 
-  const adPlaying = () => !!document.querySelector("#movie_player.ad-showing, #movie_player.ad-interrupting");
+  // Segments saved for an older cut of the video (its length then differs by more than
+  // 2 s) would skip the wrong part, so they are left out, as SponsorBlock's own app does.
+  const fits = s => !s.videoDuration || !isFinite(video.duration) || Math.abs(video.duration - s.videoDuration) <= 2;
+
+  const adPlaying = () => !!document.querySelector("#movie_player.ad-showing, #movie_player.ad-interrupting, .html5-video-player.ad-showing");
 
   function check() {
     if (!video || !segments.length || adPlaying() || video.paused && video.currentTime === 0) return;
@@ -52,7 +63,7 @@
     // Skipped every time playback is inside a segment (also after rewinding),
     // unless you pressed Undo on that segment.
     for (const s of segments) {
-      if (t >= s.start && t < s.end - 0.3 && !undone.has(s.uuid)) {
+      if (t >= s.start && t < s.end - 0.3 && !undone.has(s.uuid) && fits(s)) {
         const from = t;
         video.currentTime = Math.min(s.end, video.duration || s.end);
         toast(`Skipped ${LABELS[s.category] || s.category}`, () => { undone.add(s.uuid); video.currentTime = from; });
@@ -64,12 +75,12 @@
   // ── Coloured marks on the progress bar ──
   function drawBar() {
     document.querySelectorAll(".thurea-sb-bar").forEach(e => e.remove());
-    const bar = document.querySelector("#movie_player .ytp-progress-bar");
+    const bar = document.querySelector("#movie_player .ytp-progress-bar, .html5-video-player .ytp-progress-bar");
     if (!bar || !video || !segments.length || !isFinite(video.duration) || adPlaying()) return;
     const wrap = document.createElement("div");
     wrap.className = "thurea-sb-bar";
     wrap.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:40";
-    for (const s of segments) {
+    for (const s of segments.filter(fits)) {
       const m = document.createElement("div");
       m.style.cssText = `position:absolute;top:0;bottom:0;left:${s.start / video.duration * 100}%;` +
         `width:${(s.end - s.start) / video.duration * 100}%;background:${COLORS[s.category] || "#0d0"};opacity:.75`;
@@ -81,7 +92,7 @@
   // ── "Skipped sponsor · Undo" notice ──
   let toastTimer;
   function toast(text, undo) {
-    const player = document.querySelector("#movie_player");
+    const player = document.querySelector("#movie_player, .html5-video-player");
     if (!player) return;
     let el = player.querySelector(".thurea-sb-toast");
     if (!el) {
@@ -101,10 +112,14 @@
   }
 
   function attach() {
-    const v = document.querySelector("#movie_player video");
+    // The playing video (Shorts keep several players; the one that isn't paused).
+    const all = [...document.querySelectorAll("#movie_player video, .html5-video-player video, #shorts-player video")];
+    const v = all.find(x => !x.paused) || all[0];
     if (v && v !== video) {
       video = v;
       video.addEventListener("timeupdate", check);
+      video.addEventListener("seeked", check);
+      video.addEventListener("play", check);
       video.addEventListener("durationchange", drawBar);
     }
     const id = currentId();

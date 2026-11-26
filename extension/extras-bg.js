@@ -49,9 +49,11 @@ chrome.storage.onChanged.addListener((c, area) => {
 chrome.runtime.onMessage.addListener((msg, _s, reply) => {
   if (msg.type !== "sb:segments") return;
   if (!/^https:\/\/sponsor\.ajay\.app\/api\/skipSegments\/[0-9a-f]{4}\?/.test(msg.url || "")) { reply(null); return; }
-  fetch(msg.url, { credentials: "omit" })
-    .then(r => (r.ok ? r.json() : null))
-    .then(reply, () => reply(null));
+  // {ok, list}: 404 means no segments for any video with this prefix; anything else that
+  // fails (network, server busy) is ok: false, and sponsorblock.js tries again.
+  fetch(msg.url, { credentials: "omit", signal: AbortSignal.timeout(10000) })
+    .then(r => (r.ok ? r.json().then(list => ({ ok: true, list })) : { ok: r.status === 404, list: [] }))
+    .then(reply, () => reply({ ok: false }));
   return true;
 });
 

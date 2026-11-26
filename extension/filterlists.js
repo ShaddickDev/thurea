@@ -141,22 +141,54 @@ async function loadFilterTexts(preferRemote) {
   return { texts, source };
 }
 
-// Applies converted rules. If Chromium rejects one, it's dropped and the rest retried.
+// Applies converted rules. If the browser rejects one, it's dropped and the rest retried.
+// The lists can hold more rules than a browser allows an extension (Firefox fewer than
+// Chromium), so they are cut to fit next to Thurea's other dynamic rules, regex rules too.
 async function applyFilterRules(rules) {
-  const existing = (await chrome.declarativeNetRequest.getDynamicRules()).filter(r => r.id >= FILTER_RULE_BASE).map(r => r.id);
-  let toAdd = rules, rejected = 0;
+  const dnr = chrome.declarativeNetRequest;
+  const all = await dnr.getDynamicRules();
+  const existing = all.filter(r => r.id >= FILTER_RULE_BASE).map(r => r.id);
+  const others = all.filter(r => r.id < FILTER_RULE_BASE);
+  const room = (dnr.MAX_NUMBER_OF_DYNAMIC_RULES || dnr.MAX_NUMBER_OF_DYNAMIC_AND_SESSION_RULES || 5000) - others.length - 100;
+  const regexRoom = (dnr.MAX_NUMBER_OF_REGEX_RULES || 1000) - others.filter(r => r.condition.regexFilter).length - 50;
+  let regexes = 0, cut = 0;
+  let toAdd = rules.filter(r => {
+    if (r.condition.regexFilter && ++regexes > regexRoom) { cut++; return false; }
+    return true;
+  });
+  if (toAdd.length > room) { cut += toAdd.length - room; toAdd = toAdd.slice(0, Math.max(0, room)); }
+  let rejected = 0;
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
-      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing, addRules: toAdd });
-      return { applied: toAdd.length, rejected };
+      await dnr.updateDynamicRules({ removeRuleIds: existing, addRules: toAdd });
+      return { applied: toAdd.length, rejected, cut };
     } catch (e) {
+      // Chromium names the rule it refused ("…rule with id 123…"); Firefox doesn't always.
       const bad = /id (\d+)/i.exec(String(e.message));
-      if (!bad) throw e;
+      if (!bad) return { ...(await addInParts(dnr, existing, toAdd)), cut };
       toAdd = toAdd.filter(r => r.id !== Number(bad[1]));
       rejected++;
     }
   }
   throw new Error("Too many rejected filter rules");
+}
+
+// The slow way, when the browser doesn't say which rule it refused: in halves, down to the
+// single rules it won't take.
+async function addInParts(dnr, existing, rules) {
+  await dnr.updateDynamicRules({ removeRuleIds: existing });
+  let applied = 0, rejected = 0;
+  const add = async part => {
+    if (!part.length) return;
+    try { await dnr.updateDynamicRules({ addRules: part }); applied += part.length; }
+    catch {
+      if (part.length === 1) { rejected++; return; }
+      const half = Math.ceil(part.length / 2);
+      await add(part.slice(0, half)); await add(part.slice(half));
+    }
+  };
+  for (let i = 0; i < rules.length; i += 1000) await add(rules.slice(i, i + 1000));
+  return { applied, rejected };
 }
 
 async function updateFilterListsNow({ preferRemote = true } = {}) {
@@ -171,7 +203,7 @@ async function updateFilterListsNow({ preferRemote = true } = {}) {
   const stale = cosKeys.filter(k => !(k in entries));
   if (stale.length) await chrome.storage.local.remove(stale);
   const { privacyFilters = true } = await chrome.storage.local.get("privacyFilters");
-  const filterStatus = { updated: Date.now(), source, rules: result.applied, rejected: result.rejected,
+  const filterStatus = { updated: Date.now(), source, rules: result.applied, rejected: result.rejected, cut: result.cut || 0,
     hiding: stats.hiding, sites: Object.keys(cosmetic).length, privacy: privacyFilters };
   await chrome.storage.local.set({ ...entries, cosKeys: Object.keys(entries), filterStatus, filterRulesCache: rules });
   return filterStatus;

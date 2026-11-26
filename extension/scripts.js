@@ -36,7 +36,16 @@ async function checkAvailable() {
   if (!ok) pollTimer = setTimeout(checkAvailable, 2000);
   else render();
 }
-$("openSettings").onclick = () => chrome.tabs.create({ url: "chrome://extensions/?id=" + chrome.runtime.id });
+if (chrome.runtime.getURL("").startsWith("moz-extension:")) {
+  // Firefox: userscripts are an optional permission, asked for here.
+  $("banner").querySelector("b").textContent = "Userscripts need one more permission in Firefox.";
+  $("banner").querySelector("ol").replaceChildren(
+    Object.assign(document.createElement("li"), { textContent: "Click the button below and choose Allow." }));
+  $("openSettings").textContent = "Allow userscripts";
+  $("openSettings").onclick = () => chrome.permissions.request({ permissions: ["userScripts"] }).then(ok => ok && checkAvailable(), () => {});
+} else {
+  $("openSettings").onclick = () => chrome.tabs.create({ url: "chrome://extensions/?id=" + chrome.runtime.id });
+}
 
 // ── List ──
 async function render() {
