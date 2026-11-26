@@ -251,7 +251,8 @@ android/     Thurea for Android
 crates/      Rust: thurea-core (shared by Android and desktop), thurea-agent (`thurea`: phone setup,
              verses, status, household mesh), thurea-tray (Linux tray outside Omarchy)
 policy/      verses.json (World English Bible), blocklist.txt, update-lists.sh
-bend/        audit.bend: bulk blocklist audits on the Bend/HVM parallel runtime (`thurea audit --engine bend`)
+bend/        audit.bend: bulk blocklist audits on the Bend/HVM parallel runtime (`thurea audit --engine bend`);
+             tests/ and test.sh: Bend property tests for bedtime windows and the audit (`bend/test.sh`)
 release/     build.sh, publish.sh, release public key, VERSION
 lab/         isolated test lab (VMs / emulator, no internet)
 ```
