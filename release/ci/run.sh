@@ -41,7 +41,7 @@ if [ "$MODE" = test ]; then
     -passout file:"$K/windows-signing-pass" -out "$K/windows-signing.pfx"
   rm -f "$K/windows-signing.key"
   export THUREA_SIGN_CMD="$R/release/ci/sign-windows.sh"
-  export THUREA_MSIX_PUBLISHER=$(msix_publisher)
+  export THUREA_MSIX_PUBLISHER=$(msix_publisher) THUREA_SIGN_CERT=$K/windows-signing.crt
   umask 022  # the keys above stay private; the packages need normal permissions
   "$R/release/build.sh" "$VER"
   D=$R/dist
@@ -75,6 +75,8 @@ if [ -n "${THUREA_WINDOWS_PFX:-}" ]; then
   export THUREA_SIGN_CMD="$R/release/ci/sign-windows.sh"
   # The repository variable THUREA_MSIX_PUBLISHER wins; otherwise the certificate's own subject.
   [ -n "${THUREA_MSIX_PUBLISHER:-}" ] || export THUREA_MSIX_PUBLISHER=$(msix_publisher)
+  openssl pkcs12 -in "$K/windows-signing.pfx" -passin file:"$K/windows-signing-pass" -nokeys -clcerts 2>/dev/null \
+    | openssl x509 -out "$K/windows-signing.crt" && export THUREA_SIGN_CERT=$K/windows-signing.crt
 fi
 unset THUREA_RELEASE_KEY THUREA_EXTENSION_KEY THUREA_ANDROID_KEYSTORE THUREA_ANDROID_KEYSTORE_PASS THUREA_WINDOWS_PFX THUREA_WINDOWS_PFX_PASS
 [ "${THUREA_REQUIRE_SIGNED:-}" = 1 ] || unset THUREA_REQUIRE_SIGNED
