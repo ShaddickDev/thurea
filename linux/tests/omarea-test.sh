@@ -179,6 +179,19 @@ check "old plugin link gone" '[ ! -e "$C/omarchy/plugins/thurea.omarchy" ] && [ 
 check "Omarea takes the old widget's place" '[ "$(jq -c ".bar.layout.right[2]" "$C/omarchy/shell.json")" = "{\"id\":\"thurea.omarea\",\"x\":1}" ]'
 check "and isn't added twice" '[ "$(jq "[.. | objects | select(.id? == \"thurea.omarea\")] | length" "$C/omarchy/shell.json")" = 1 ]'
 
+echo "== Omarchy 4: added with omarchy plugin add (a git checkout)"
+newhome o4git
+C=$HOME/.config; mkdir -p "$C/omarchy/plugins/thurea.omarea/.git"
+printf '[remote "origin"]\n\turl = https://github.com/ShaddickDev/thurea.git\n' > "$C/omarchy/plugins/thurea.omarea/.git/config"
+om install --auto >/dev/null 2>&1
+check "Thurea's checkout swapped for the package's self-updating copy" '[ "$(readlink "$C/omarchy/plugins/thurea.omarea")" = "$PLUGIN" ]'
+check "and kept outside Omarchy's plugins folder" '[ -f "$HOME/.local/state/omarea/git-checkout/.git/config" ]'
+newhome o4own
+C=$HOME/.config; mkdir -p "$C/omarchy/plugins/thurea.omarea/.git"
+printf '[remote "origin"]\n\turl = https://example.org/me/fork.git\n' > "$C/omarchy/plugins/thurea.omarea/.git/config"
+om install --auto >/dev/null 2>&1
+check "someone else's checkout is left alone" '[ -d "$C/omarchy/plugins/thurea.omarea" ] && [ ! -L "$C/omarchy/plugins/thurea.omarea" ]'
+
 newhome o4gone
 C=$HOME/.config; mkdir -p "$C/omarchy" "$C/thurea"; touch "$C/thurea/.omarchy-bar"
 echo '{"version":1,"bar":{"layout":{"right":[{"id":"omarchy.network"}]}}}' > "$C/omarchy/shell.json"

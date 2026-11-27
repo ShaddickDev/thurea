@@ -369,6 +369,7 @@ mod tray {
     }
 
     pub fn run(app: Arc<App>) -> Result<(), String> {
+        let mine = app.clone();
         let mut t = ThureaTray { app, state: String::new(), line: String::new(), verse: String::new(), prefs: serde_json::json!({}) };
         t.refresh();
         let handle = t.spawn().map_err(|e| format!("no system tray available: {e}"))?;
@@ -377,8 +378,33 @@ mod tray {
             if handle.update(|t: &mut ThureaTray| t.refresh()).is_none() {
                 return Ok(());
             }
+            restart_if_updated(&mine);
         }
     }
+
+    /// Thurea updates itself (thurea-update), which replaces this program's file but not this
+    /// running copy. Once the installed version differs from this one, start the new copy in this
+    /// one's place (not while a phone is being set up).
+    fn restart_if_updated(app: &App) {
+        let Ok(installed) = std::fs::read_to_string(INSTALLED_VERSION) else { return };
+        if installed.trim().is_empty() || installed.trim() == env!("CARGO_PKG_VERSION") || !std::path::Path::new(INSTALLED_EXE).exists() {
+            return;
+        }
+        // Restarted for this version already and still not it (a mismatched build): don't loop.
+        if std::env::var("THUREA_TRAY_RESTARTED").is_ok_and(|v| v == installed.trim()) {
+            return;
+        }
+        if app.phone.lock().map_or(true, |p| p.child.is_some()) {
+            return;
+        }
+        use std::os::unix::process::CommandExt;
+        let args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--open" && a != "--print-url").collect();
+        let e = Command::new(INSTALLED_EXE).args(&args).env("THUREA_TRAY_RESTARTED", installed.trim()).exec();
+        eprintln!("thurea-tray: couldn't restart after the update: {e}");
+    }
+
+    const INSTALLED_VERSION: &str = "/usr/share/thurea/VERSION";
+    const INSTALLED_EXE: &str = "/usr/bin/thurea-tray";
 }
 
 fn main() {

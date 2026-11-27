@@ -1,5 +1,8 @@
 package com.thurea.guard;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -27,7 +30,10 @@ import org.json.JSONObject;
  * A release is used only if its thurea-manifest.json is signed with Thurea's release key
  * (ReleaseKey.SPKI, written by release/build.sh) and the APK matches the SHA-256 in that signed
  * manifest. Android also checks that the APK is signed with the same key as the installed Thurea.
- * As device owner Thurea installs it without asking. Checked at most once an hour (ReapplyJob).
+ * As device owner Thurea installs it without asking; otherwise Android 12+ installs it without
+ * asking too (UPDATE_PACKAGES_WITHOUT_USER_ACTION, Thurea updating itself), and older Android, or
+ * a phone where Android still wants a tap, gets a "tap to install" notification (askToInstall).
+ * Checked at most once an hour (ReapplyJob).
  */
 final class Updater {
     static final String BASE = "https://github.com/ShaddickDev/thurea/releases";
@@ -75,6 +81,20 @@ final class Updater {
             Intent cb = new Intent(c, PinReceiver.class).putExtra("op", "self");
             s.commit(PendingIntent.getBroadcast(c, 0x5e1f, cb, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT).getIntentSender());
         }
+    }
+
+    /** Android wants a tap for this update: a notification that opens Android's install prompt. */
+    static void askToInstall(Context c, Intent confirm) {
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        nm.createNotificationChannel(new NotificationChannel("update", "Thurea updates", NotificationManager.IMPORTANCE_DEFAULT));
+        PendingIntent tap = PendingIntent.getActivity(c, 0x5e1f, confirm, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        nm.notify(0x5e1f, new Notification.Builder(c, "update")
+            .setSmallIcon(R.drawable.thurea_small)
+            .setContentTitle("Thurea update ready")
+            .setContentText("Tap to install it (checked against Thurea's signed release).")
+            .setContentIntent(tap).setAutoCancel(true)
+            .build());
+        note(c.getSharedPreferences("update", Context.MODE_PRIVATE), "An update is ready: tap the notification to install it.");
     }
 
     static boolean verified(byte[] data, byte[] sig) throws Exception {
