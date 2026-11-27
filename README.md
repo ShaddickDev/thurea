@@ -1,5 +1,8 @@
 # Thurea
 
+The name comes from the Ancient Greek *thureos* (θυρεός), a large door-shaped shield that covered
+the whole body. It's the word behind "the shield of faith" in Ephesians 6:16.
+
 Family protection that blocks ads, trackers and adult sites on every device in the house, and is
 hard to switch off.
 
