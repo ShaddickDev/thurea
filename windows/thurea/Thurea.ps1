@@ -583,7 +583,9 @@ function Build-Tray {
     if ((Test-Path -LiteralPath $exe) -and (Get-AuthenticodeSignature -LiteralPath $exe).Status -eq 'Valid') { return }
     if (-not $src) { return }
     $csc = "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-    $out = & $csc /nologo /target:winexe /optimize+ "/out:$exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.Core.dll @src 2>&1
+    $ico = Join-Path $Home_ 'thurea.ico'
+    $iconArg = if (Test-Path -LiteralPath $ico) { "/win32icon:$ico" } else { '/nologo' }
+    $out = & $csc /nologo $iconArg /target:winexe /optimize+ "/out:$exe" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.Core.dll @src 2>&1
     if ($LASTEXITCODE) { Log "tray app did not compile: $out" }
 }
 
@@ -643,7 +645,7 @@ function Set-StartMenu {
     $exe = Join-Path $Home_ 'ThureaTray.exe'
     if ((Test-Path $exe) -and -not (Test-Path $lnk)) {
         $w = New-Object -ComObject WScript.Shell
-        $s = $w.CreateShortcut($lnk); $s.TargetPath = $exe; $s.Description = 'Thurea: protection, verse of the day, set up a phone'; $s.Save()
+        $s = $w.CreateShortcut($lnk); $s.TargetPath = $exe; $s.IconLocation = "$exe,0"; $s.Description = 'Thurea: protection, verse of the day, set up a phone'; $s.Save()
     }
 }
 
