@@ -2,6 +2,22 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## 1.0.2
+
+### Windows
+- A new MSIX installer, `thurea-windows.msix` ("Thurea Setup"), next to the zip. It installs
+  Thurea into Program Files the same way `Install Thurea.cmd` does, and removing "Thurea Setup"
+  leaves Thurea in place.
+- `Trust-Thurea.cmd`: run it once per PC as an Administrator so Windows trusts the certificate the
+  MSIX is signed with. Then the MSIX installs.
+- Tray: the gear menu now holds Re-apply protection, About (version, copyright, licence) and the
+  credits; the home window shows Set up a phone, Another device and Family.
+
+### Everything else
+- Thurea is now MIT licensed (`LICENSE`, shipped with every package).
+- Downloads are split into Single adult and Family in the README, the install guide and the
+  release notes.
+
 ## 1.0.1
 
 **Install this release by hand once.** 1.0.1 is signed with a new release key, so a device on
