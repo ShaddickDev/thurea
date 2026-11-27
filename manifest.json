@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "thurea.omarea",
   "name": "Omarea",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "author": "Thurea",
   "license": "MIT",
   "description": "Omarea: Thurea family protection made for Omarchy. Protection status, the family's requests and screen time, the verse of the day and one-scan phone setup in the bar, with Omarchy notifications when something needs a parent. Installed from this repository with `omarchy plugin add`; Thurea itself comes from your package manager.",
