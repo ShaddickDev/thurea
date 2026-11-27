@@ -3,6 +3,14 @@
 # only for the moment Android requires. Never touches passwords: you remove and re-add the
 # accounts on the phone; this script opens the right screens, waits, and does the rest.
 # Runs without keyboard input (progress is printed); stops safely at any problem.
+#
+#   phone-setup.sh          set up, or update a Thurea that is already device owner or device admin
+#   phone-setup.sh check    show what would happen, change nothing
+#   phone-setup.sh owner    make a device-admin Thurea the device owner (signs accounts out once)
+#
+# Updating never signs anything out: Thurea is installed over itself (same package, same signing
+# key), as its own hourly update does. Only becoming device owner the first time needs the phone
+# to have no accounts, because Android allows `dpm set-device-owner` only then.
 set -uo pipefail
 A=$(cd "$(dirname "$0")" && pwd)
 LOG=${THUREA_SETUP_LOG:-/dev/null}
@@ -75,6 +83,13 @@ say "Phone: $(sh getprop ro.product.manufacturer) $(sh getprop ro.product.model)
 if [ "${1:-}" != check ] && sh dpm list-owners | grep -q "Device Owner"; then
   if sh dpm list-owners | grep -q com.thurea.guard; then say "Thurea is already the device owner — updating it."; install_thurea || exit 1; grant; sh am start -n com.thurea.guard/.MainActivity >/dev/null; pin_apps; app_stores; say "Done."; exit 0; fi
   say "STOP: another app already manages this phone:"; sh dpm list-owners; exit 1
+fi
+# Already a device admin (not owner): update in place, accounts stay signed in.
+if [ "${1:-}" != check ] && [ "${1:-}" != owner ] && sh dumpsys device_policy | grep -q 'com.thurea.guard/.AdminReceiver'; then
+  say "Thurea is already a device admin on this phone — updating it. Your accounts (WhatsApp included) stay signed in."
+  install_thurea || exit 1; grant; sh am start -n com.thurea.guard/.MainActivity >/dev/null
+  say "Done. (To make Thurea the device owner as well, which signs accounts out once, run: phone-setup.sh owner)"
+  exit 0
 fi
 users=$(sh pm list users | grep -c "UserInfo{")
 if [ "$users" -gt 1 ] && [ "${1:-}" != check ]; then
