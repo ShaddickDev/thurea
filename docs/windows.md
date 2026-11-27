@@ -12,17 +12,26 @@ itself, with features Microsoft supports, and several of them run in the kernel:
 
 | Protection | Mechanism | Enforced by |
 |---|---|---|
-| Only family DNS can be used; no other DNS, DNS-over-TLS or public DNS-over-HTTPS | Windows Defender Firewall rules (group *Thurea*) | Windows Filtering Platform in the kernel's network stack (`tcpip.sys`) |
-| Family DNS (Cloudflare for Families) on every adapter, encrypted | DNS client settings, `DoHPolicy` | Windows' DNS client |
-| Browsers: Thurea extension forced on, SafeSearch, family DNS inside the browser, no private or guest windows | Chromium and Firefox enterprise policies | the browsers |
+| Browsers: Thurea extension forced on, SafeSearch, no private or guest windows | Chromium and Firefox enterprise policies | the browsers |
 | Tor Browser, Mullvad Browser and Opera can't run | Image File Execution Options | Windows' process loader |
 | Thurea's files and settings can only be changed by Administrators and SYSTEM | NTFS ACLs (`Program Files\Thurea`, `ProgramData\Thurea`, hosts) | the kernel's security reference monitor |
-| Thurea comes back if part of it is switched off | five SYSTEM tasks that restore each other, re-applying every 5 minutes, at startup and on every network change | Task Scheduler |
+| Thurea comes back if part of it is switched off | five SYSTEM tasks that restore each other, re-applying every 5 minutes and at startup | Task Scheduler |
 | Updates only from Thurea's own signed releases | RSA-SHA256 manifest signature + SHA-256 of the download | Thurea.ps1 |
 
 `Thurea.ps1` (the `\Thurea\Thurea` task) is the **only** enforcer. `thurea.exe` (the household
 mesh, the family helper, phone setup) asks it to apply and reads its report
 (`ProgramData\Thurea\status.json`); it no longer has rules of its own that could disagree.
+
+**Thurea never changes DNS on Windows.** It doesn't set the adapters' DNS servers, Windows' DNS
+over HTTPS or the browsers' secure DNS, and it adds no firewall rule on DNS traffic. Versions up to
+1.0.5 switched every adapter to Cloudflare for Families and firewalled every other DNS server; on
+networks that can't reach 1.1.1.3 (some routers and ISPs, captive Wi-Fi, security suites) that left
+the PC without internet, sometimes only for some sites at first. Filtering on Windows is the
+Thurea extension's, SafeSearch's and the blocked browsers' job. Updating from an older version
+puts DNS back once: adapters still set to exactly 1.1.1.3 / 1.0.0.3 go back to the network's own
+DNS, Thurea's DNS firewall rules and its `DoHPolicy` are removed, and the browsers' secure DNS
+policies are dropped (`ProgramData\Thurea\dns-restored` records that it was done; `thurea.log`
+says what changed).
 
 What this does *not* stop: someone with an Administrator account who sets out to take Thurea
 apart. That is the reason children's accounts must be standard accounts (Thurea says so in the
@@ -46,16 +55,8 @@ tooling. Thurea stays clear of all of it:
   `crates/thurea-core/src/desktop.rs`: Vanguard, Easy Anti-Cheat, BattlEye, FACEIT, ESEA,
   nProtect GameGuard, XIGNCODE). A parent can still limit or block a *game*: closing the game is
   fine, killing its anti-cheat under it is not.
-* **Network:** the firewall rules only block DNS (ports 53 and 853) to resolvers other than the
-  family ones, and all traffic to a fixed list of public DNS-over-HTTPS servers. Game, voice and
-  matchmaking traffic is never touched. Riot's and Epic's own name lookups go through family DNS
-  like everything else, and Cloudflare for Families doesn't block them.
-* **Never cuts the PC off the internet:** before it switches an adapter to family DNS, Thurea
-  checks that this network reaches Cloudflare for Families (port 53, or 443 for DNS over HTTPS),
-  and afterwards that names still resolve. Where they don't (a router or ISP that intercepts
-  1.1.1.x, captive Wi-Fi, a security suite), the network's own DNS stays, the DNS firewall lock is
-  lifted, browsers' DNS over HTTPS may fall back, and `status` shows `dns MISSING`. It tries again
-  every 5 minutes (30 minutes after a failed switch) and on every network change.
+* **Network:** Thurea doesn't touch DNS or block any outgoing traffic. Its only firewall rules
+  let other household devices reach this PC on the local network (private networks only).
 
 ### Windows security features
 
@@ -66,9 +67,9 @@ tooling. Thurea stays clear of all of it:
 | Microsoft vulnerable driver blocklist | unaffected |
 | Smart App Control / App Control for Business (WDAC) | needs a **code-signed** release (below). An unsigned `ThureaTray.exe` may be blocked, and unsigned scripts run in Constrained Language Mode, which breaks `Thurea.ps1` |
 | Microsoft Defender, other antivirus / EDR | works; a signed release avoids SmartScreen warnings. Self-restoring tasks and IFEO entries are also what some malware does, so unsigned builds are more likely to be flagged |
-| Windows Firewall | must stay on: Thurea turns it back on if it is switched off. Third-party firewalls that replace it disable Thurea's DNS lockdown (`status` shows `firewall MISSING`) |
+| Windows Firewall, third-party firewalls | unaffected: Thurea adds only two inbound rules for the household on private networks |
 | Intune / work or school MDM | Thurea writes its "managed" marker only on PCs **without** a real enrollment, and removes it if the PC is enrolled later. A work PC's real enrollment already satisfies the browsers |
-| VPN clients | a VPN that sets its own DNS is overridden back to family DNS within 5 minutes |
+| VPN clients | unaffected: Thurea never changes DNS, so a VPN's own DNS stays |
 
 ## Code signing
 
@@ -105,7 +106,7 @@ Each release also has `thurea-windows.msix` ("Thurea Setup"), built by `release/
 **Thurea's protection does not run inside the MSIX sandbox, so the package doesn't try to.** A
 packaged app's registry and AppData writes can be redirected into the package, its folder
 (`WindowsApps\…`) changes with every version and can't be locked down, it gets no install-time
-actions, and any user can remove it from Settings > Apps. Firewall rules, family DNS, browser
+actions, and any user can remove it from Settings > Apps. Browser
 policies, SYSTEM tasks and a locked `Program Files\Thurea` can't live there. So the package is
 only a launcher: `ThureaSetup.exe` asks for an Administrator (the `allowElevation` capability),
 then `Setup.ps1` runs `Thurea.ps1 -Install` from the package as a one-off **SYSTEM task**, which
@@ -167,6 +168,7 @@ restore each other:
 ```powershell
 Get-ScheduledTask -TaskPath '\Thurea\' | Unregister-ScheduledTask -Confirm:$false
 Get-NetFirewallRule -Group 'Thurea' | Remove-NetFirewallRule
+# Only needed on a PC that still has Thurea 1.0.5 or older, which changed DNS:
 Get-NetAdapter | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }
 Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' DoHPolicy -ErrorAction SilentlyContinue
 'Google\Chrome','Chromium','Microsoft\Edge','BraveSoftware\Brave','Vivaldi','Helium','Thorium','YandexBrowser' |

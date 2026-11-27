@@ -49,7 +49,8 @@ Every option and the full family setup: [docs/install.md](docs/install.md).
 
 ## What it does
 
-* Family DNS everywhere, other DNS and DNS-over-HTTPS blocked, 64,000+ blocked domains on Linux.
+* Family DNS on Linux and Android, with other DNS and DNS-over-HTTPS blocked, and 64,000+ blocked
+  domains on Linux. Windows leaves DNS alone and filters in the browser.
 * Browsers locked down: the Thurea extension (ads, trackers, YouTube ads, SponsorBlock, video
   downloads), SafeSearch, no incognito.
 * Parents decide, children ask: approvals, screen time, bedtime and Lock now, from a phone or the

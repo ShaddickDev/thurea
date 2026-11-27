@@ -3,26 +3,29 @@
 Thurea for Windows - the Windows counterpart of thurea on Omarchy.
 
   Thurea.ps1 -Install   copy Thurea to Program Files, register its tasks, apply (Administrator)
-  Thurea.ps1 -Apply     (re)apply every protection; run by the "Thurea" task every 5 minutes,
-                             at startup and whenever the network changes
+  Thurea.ps1 -Apply     (re)apply every protection; run by the "Thurea" task every 5 minutes
+                             and at startup
   Thurea.ps1 -Serve     serve the Thurea extension's updates to browsers on 127.0.0.1:8137
   Thurea.ps1 -Status    print what is and isn't in place
   Thurea.ps1 -Update    install the newest signed Thurea release from GitHub (hourly "Thurea Update" task)
 
 What it keeps in place (like /usr/lib/thurea/thurea-apply on Linux):
   hosts file      only if data\hosts-block is shipped (a list this size stalls Windows' DNS Client)
-  DNS             Cloudflare for Families (1.1.1.3 / 1.0.0.3) on every network adapter, encrypted when possible
-  firewall        apps can't use another DNS server, DNS-over-TLS, or the public DNS-over-HTTPS servers
   browsers        Chrome, Chromium, Edge, Brave, Vivaldi, Helium (and any of them installed later): Thurea
-                  force-installed and locked on, family DNS inside the browser, SafeSearch, no
-                  incognito or guest windows. Firefox family: family DNS locked, private browsing
-                  off, harmful sites blocked.
+                  force-installed and locked on, SafeSearch, no incognito or guest windows.
+                  Firefox family: private browsing off, harmful sites blocked.
   managed         this PC is marked as managed, which Chromium browsers require before they accept
                   an extension that isn't from the Chrome Web Store
   blocked apps    Tor Browser, Mullvad Browser and Opera can't run
   Edge            stays removed (PCs set up from the Thurea Windows ISO only)
   uninstall block Thurea's tasks put each other back if one is deleted or disabled, and Thurea shows
                   in Settings > Apps without an Uninstall button
+
+What it never touches: DNS. Not the adapters' DNS servers, not Windows' DNS over HTTPS, not the
+browsers' secure DNS, and no firewall rule on DNS traffic. Forcing family DNS left PCs with no
+internet on networks that can't reach it (YouTube and Twitch first, then everything), so
+filtering is the extension's, SafeSearch's and the blocked browsers' job. Versions up to 1.0.5 did
+change DNS: Restore-Dns puts back what they changed (see below).
 #>
 [CmdletBinding(DefaultParameterSetName = 'Apply')]
 param(
@@ -47,32 +50,10 @@ $HostsFile = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $Begin = '# >>> thurea (Thurea blocker - managed by the system, do not edit)'
 $End = '# <<< thurea'
 
+# What versions up to 1.0.5 set, so Restore-Dns can recognise and undo it.
 $FamilyV4 = @('1.1.1.3', '1.0.0.3')
 $FamilyV6 = @('2606:4700:4700::1113', '2606:4700:4700::1003')
-$FamilyDoh = 'https://family.cloudflare-dns.com/dns-query'
-
-# Same list as thurea.nft: public DNS-over-HTTPS / DNS servers apps could use to get around family DNS.
-$DohBlock = @(
-    '1.1.1.1', '1.0.0.1', '1.1.1.2', '1.0.0.2', '104.16.248.249', '104.16.249.249',
-    '8.8.8.8', '8.8.4.4', '9.9.9.9', '9.9.9.10', '9.9.9.11', '9.9.9.12',
-    '149.112.112.9', '149.112.112.10', '149.112.112.11', '149.112.112.12', '149.112.112.112',
-    '94.140.14.14', '94.140.15.15', '94.140.14.140', '94.140.14.141', '94.140.14.15', '94.140.15.16',
-    '208.67.222.222', '208.67.220.220', '208.67.222.2', '208.67.220.2',
-    '45.90.28.0/24', '45.90.30.0/24', '76.76.2.0/24', '76.76.10.0/24', '194.242.2.0/24',
-    '185.222.222.222', '45.11.45.11', '101.101.101.101', '101.102.103.104',
-    '223.5.5.5', '223.6.6.6', '1.12.12.12', '120.53.53.53', '77.88.8.8', '77.88.8.1', '86.54.11.1', '86.54.11.100',
-    '2606:4700:4700::1111', '2606:4700:4700::1001', '2606:4700:4700::1112', '2606:4700:4700::1002',
-    '2606:4700::6810:f8f9', '2606:4700::6810:f9f9', '2001:4860:4860::8888', '2001:4860:4860::8844',
-    '2620:fe::fe', '2620:fe::9', '2620:fe::10', '2620:fe::11', '2620:fe::fe:10', '2620:fe::fe:11',
-    '2a10:50c0::ad1:ff', '2a10:50c0::ad2:ff', '2a10:50c0::1:ff', '2a10:50c0::2:ff',
-    '2620:119:35::35', '2620:119:53::53', '2a07:a8c0::/32', '2a07:a8c1::/32', '2606:1a40::/32', '2a07:e340::/32'
-)
-# Port 53/853 is allowed only to the family resolvers: every other address, as ranges.
-$NotFamily = @(
-    '0.0.0.0-1.0.0.2', '1.0.0.4-1.1.1.2', '1.1.1.4-255.255.255.255',
-    '::-2606:4700:4700::1002', '2606:4700:4700::1004-2606:4700:4700::1112',
-    '2606:4700:4700::1114-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'
-)
+$OldDnsRules = @('Thurea - public DNS-over-HTTPS servers', 'Thurea - other DNS servers (UDP)', 'Thurea - other DNS servers (TCP)')
 
 # HKLM policy keys of the Chromium browsers (same policy names in all of them).
 $Chromium = [ordered]@{
@@ -122,6 +103,11 @@ function Set-Reg([string]$key, [string]$name, $value, [string]$type) {
 function Get-Reg([string]$key, [string]$name) {
     try { return (Get-ItemProperty -LiteralPath "Registry::HKEY_LOCAL_MACHINE\$key" -Name $name -ErrorAction Stop).$name } catch { return $null }
 }
+function Remove-Reg([string]$key, [string]$name) {
+    if ($null -eq (Get-Reg $key $name)) { return $false }
+    Remove-ItemProperty -LiteralPath "Registry::HKEY_LOCAL_MACHINE\$key" -Name $name -Force
+    return $true
+}
 
 # ---------- managed marker ----------
 # Chromium accepts off-store force-installed extensions on Windows only when the machine reports
@@ -170,7 +156,7 @@ function Set-Managed {
 function Set-Hosts {
     # A 100,000-line hosts file makes Windows' DNS Client spend minutes of CPU at every start
     # (measured: 400 s with no name resolution meanwhile), so on Windows the list is optional:
-    # family DNS (locked in by the firewall) and the Thurea extension do the blocking. If
+    # the Thurea extension does the blocking. If
     # data\hosts-block is present it is used; otherwise any old Thurea section is removed.
     $src = Join-Path $Data 'hosts-block'
     if (-not (Test-Path -LiteralPath $src)) {
@@ -178,7 +164,7 @@ function Set-Hosts {
         if ($cur.Contains('# >>> thurea')) {
             $mine = [regex]::Replace($cur, "(?s)\n?# >>> thurea.*?(# <<< thurea\n?|$)", "`n").TrimEnd("`n") + "`n"
             [IO.File]::WriteAllText($HostsFile, ($mine -replace "`n", "`r`n"), [Text.Encoding]::ASCII)
-            Log 'hosts: old Thurea block list removed (Windows uses family DNS instead)'
+            Log 'hosts: old Thurea block list removed'
         }
         return
     }
@@ -202,110 +188,50 @@ function Set-Hosts {
     if ($acl.Sddl -ne $sddl) { $acl.SetSecurityDescriptorSddlForm($sddl); Set-Acl -LiteralPath $HostsFile -AclObject $acl }
 }
 
-# ---------- DNS ----------
-# Can this network reach the family resolvers? Plain DNS (port 53) to 1.1.1.3 / 1.0.0.3, or, for
-# networks that block port 53 to outside resolvers, HTTPS (port 443) to them, which Windows' DNS
-# over HTTPS uses. Some networks reach neither (a router or ISP that intercepts 1.1.1.x, captive
-# Wi-Fi, some security suites): forcing the family DNS there leaves the PC with no internet at all.
-function Test-FamilyReachable {
-    foreach ($ip in $FamilyV4) {
+# ---------- DNS: never changed, and put back after older versions ----------
+# Up to 1.0.5 Thurea switched every adapter to Cloudflare for Families, turned on Windows' DNS over
+# HTTPS for it, and firewalled every other DNS server. On networks that can't reach 1.1.1.3 that
+# cut the PC off the internet. Thurea no longer changes DNS at all; this undoes, once, what an older
+# version left behind. Only Thurea's own settings are touched: an adapter goes back to the network's
+# own DNS only if it is set to exactly the family servers Thurea set. When everything is back,
+# ProgramData\Thurea\dns-restored is written and Thurea never looks at DNS again.
+function Restore-Dns {
+    $done = Join-Path $State 'dns-restored'
+    if (Test-Path -LiteralPath $done) { return }
+    $ok = $true
+    # Firewall: the DNS lock first, so the network's own DNS is reachable before adapters use it.
+    foreach ($name in $OldDnsRules) {
         try {
-            if (Resolve-DnsName -Name 'www.msftconnecttest.com' -Server $ip -DnsOnly -NoHostsFile -QuickTimeout -Type A -ErrorAction Stop) { return $true }
-        } catch {}
+            $r = @(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)
+            if ($r.Count) { $r | Remove-NetFirewallRule -ErrorAction Stop; Log "DNS: old firewall rule '$name' removed" }
+        } catch { $ok = $false; Log "DNS: couldn't remove firewall rule '$name': $_" }
     }
-    foreach ($ip in $FamilyV4) {
-        $tcp = New-Object Net.Sockets.TcpClient
-        try { if ($tcp.ConnectAsync($ip, 443).Wait(3000) -and $tcp.Connected) { return $true } } catch {} finally { $tcp.Dispose() }
-    }
-    return $false
-}
-# Does this PC resolve names at all right now (through whatever DNS its adapters use)?
-function Test-SystemDns {
-    foreach ($n in @('www.msftconnecttest.com', 'www.google.com')) {
-        try { if (Resolve-DnsName -Name $n -DnsOnly -NoHostsFile -QuickTimeout -Type A -ErrorAction Stop) { return $true } } catch {}
-    }
-    return $false
-}
-# Asked once per run. After the family DNS was tried and nothing resolved, it isn't tried again for
-# 30 minutes (so the PC doesn't drop off the internet for a moment at every 5-minute apply).
-$script:FamilyOk = $null
-function Get-FamilyOk {
-    if ($null -eq $script:FamilyOk) {
-        $failed = Get-Item (Join-Path $State 'family-dns.failed') -ErrorAction SilentlyContinue
-        $script:FamilyOk = if ($failed -and $failed.LastWriteTime -gt (Get-Date).AddMinutes(-30)) { $false } else { Test-FamilyReachable }
-    }
-    return $script:FamilyOk
-}
-
-function Set-FamilyDns {
-    foreach ($ip in $FamilyV4 + $FamilyV6) {
-        $doh = Get-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue
-        if (-not $doh) {
-            Add-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate $FamilyDoh -AllowFallbackToUdp $true -AutoUpgrade $true | Out-Null
-        } elseif ($doh.DohTemplate -ne $FamilyDoh -or -not $doh.AutoUpgrade) {
-            Set-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate $FamilyDoh -AllowFallbackToUdp $true -AutoUpgrade $true | Out-Null
-        }
-    }
-    # Use DoH for resolvers that support it (Allow + auto-upgrade); plain DNS to 1.1.1.3 is filtered too.
-    [void](Set-Reg 'SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'DoHPolicy' 2 'DWord')
-    $adapters = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' -and $_.InterfaceDescription -notmatch 'Loopback' })
-    if (-not (Get-FamilyOk)) {
-        # Never cut the PC off: leave (or put back) the network's own DNS until the family resolvers
-        # answer again. Apply checks every 5 minutes and on every network change. The status shows
-        # DNS as not protected meanwhile; the extension, SafeSearch and the blocked browsers stay.
-        foreach ($a in $adapters) {
-            $v4 = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses
-            if ((@($v4) -join ',') -eq ($FamilyV4 -join ',')) {
-                Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses
-                Log "DNS: $($a.Name) back to the network's own DNS (Cloudflare for Families can't be reached from this network)"
+    # Adapters.
+    $reset = 0
+    foreach ($a in @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceDescription -notmatch 'Loopback' })) {
+        try {
+            $v4 = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
+            $v6 = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv6 -ErrorAction SilentlyContinue).ServerAddresses)
+            if (($v4 -join ',') -eq ($FamilyV4 -join ',') -or ($v6 -join ',') -eq ($FamilyV6 -join ',')) {
+                Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop
+                Log "DNS: $($a.Name) back to the network's own DNS"
+                $reset++
             }
+        } catch { $ok = $false; Log "DNS: couldn't put $($a.Name) back to the network's own DNS: $_" }
+    }
+    # Windows' DNS over HTTPS policy (the DoH entries for 1.1.1.3 / 1.0.0.3 stay: they do nothing
+    # unless someone chooses those servers, and then they make them encrypted).
+    try {
+        if ((Get-Reg 'SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'DoHPolicy') -eq 2) {
+            [void](Remove-Reg 'SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'DoHPolicy')
+            Log 'DNS: Windows DNS over HTTPS policy removed'
         }
-        return
-    }
-    $changed = @()
-    foreach ($a in $adapters) {
-        $v4 = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses
-        $v6 = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv6 -ErrorAction SilentlyContinue).ServerAddresses
-        if ((@($v4) -join ',') -ne ($FamilyV4 -join ',') -or (@($v6) -join ',') -ne ($FamilyV6 -join ',')) {
-            Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ($FamilyV4 + $FamilyV6)
-            Log "DNS: $($a.Name) set to Cloudflare for Families"
-            $changed += $a
-        }
-    }
-    # Names must still resolve afterwards; if they don't, put the network's DNS back at once.
-    if ($changed.Count) { Clear-DnsClientCache -ErrorAction SilentlyContinue }
-    if ($changed.Count -and -not (Test-SystemDns)) {
-        Start-Sleep -Seconds 2
-        if (-not (Test-SystemDns)) {
-            foreach ($a in $changed) { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses }
-            $script:FamilyOk = $false
-            [IO.File]::WriteAllText((Join-Path $State 'family-dns.failed'), (Get-Date).ToString('o'))
-            Log 'DNS: nothing resolved with Cloudflare for Families: the network''s own DNS is back'
-        }
-    }
-}
-
-# ---------- firewall ----------
-function Set-FirewallRule([string]$name, [hashtable]$p) {
-    $sig = 'thurea:' + [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes(($p | ConvertTo-Json -Compress)))).Replace('-', '').Substring(0, 16)
-    $r = @(Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue)
-    $ok = $r.Count -eq 1 -and $r[0].Enabled -eq 'True' -and $r[0].Action -eq 'Block' -and $r[0].Direction -eq 'Outbound' -and $r[0].Description -eq $sig
-    if (-not $ok) {
-        $r | Remove-NetFirewallRule -ErrorAction SilentlyContinue
-        New-NetFirewallRule -DisplayName $name -Description $sig -Group 'Thurea' -Direction Outbound -Action Block -Profile Any @p | Out-Null
-        Log "firewall: rule '$name' set"
-    }
-}
-function Set-Firewall {
-    if ((Get-NetFirewallProfile | Where-Object { -not $_.Enabled })) { Set-NetFirewallProfile -All -Enabled True; Log 'firewall: turned back on' }
-    Set-FirewallRule 'Thurea - public DNS-over-HTTPS servers' @{ RemoteAddress = $DohBlock }
-    if (Get-FamilyOk) {
-        Set-FirewallRule 'Thurea - other DNS servers (UDP)' @{ Protocol = 'UDP'; RemotePort = @('53', '853'); RemoteAddress = $NotFamily }
-        Set-FirewallRule 'Thurea - other DNS servers (TCP)' @{ Protocol = 'TCP'; RemotePort = @('53', '853'); RemoteAddress = $NotFamily }
-    } else {
-        # The family resolvers can't be reached: the network's own DNS must be allowed meanwhile.
-        $r = @(Get-NetFirewallRule -DisplayName 'Thurea - other DNS servers (*' -ErrorAction SilentlyContinue)
-        if ($r.Count) { $r | Remove-NetFirewallRule; Log 'firewall: DNS lock lifted while Cloudflare for Families can''t be reached' }
+    } catch { $ok = $false; Log "DNS: couldn't remove the DNS over HTTPS settings: $_" }
+    if ($reset) { Clear-DnsClientCache -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath (Join-Path $State 'family-dns.failed') -Force -ErrorAction SilentlyContinue
+    if ($ok) {
+        [IO.File]::WriteAllText($done, (Get-Date).ToString('o'))
+        Log 'DNS: Thurea no longer changes DNS; anything an older version set has been put back'
     }
 }
 
@@ -328,10 +254,10 @@ function Set-ChromiumPolicy([string]$key) {
     $c = (Set-Reg $key 'ExtensionSettings' ($settings | ConvertTo-Json -Compress -Depth 4) 'String') -or $c
     $c = (Set-Reg "$key\3rdparty\extensions\$ExtId\policy" 'pornBlock' 1 'DWord') -or $c
     $c = (Set-Reg $key 'ForceGoogleSafeSearch' 1 'DWord') -or $c
-    # "secure" has no fallback: on a network that can't reach the family resolvers it would leave
-    # the browser with no internet, so it is "automatic" there until they answer again.
-    $c = (Set-Reg $key 'DnsOverHttpsMode' $(if (Get-FamilyOk) { 'secure' } else { 'automatic' }) 'String') -or $c
-    $c = (Set-Reg $key 'DnsOverHttpsTemplates' $FamilyDoh 'String') -or $c
+    # The browser's own secure DNS is left to the browser (versions up to 1.0.5 locked it to
+    # family DNS, which left the browser with no internet where that can't be reached).
+    $c = (Remove-Reg $key 'DnsOverHttpsMode') -or $c
+    $c = (Remove-Reg $key 'DnsOverHttpsTemplates') -or $c
     $c = (Set-Reg $key 'IncognitoModeAvailability' 1 'DWord') -or $c
     $c = (Set-Reg $key 'InPrivateModeAvailability' 1 'DWord') -or $c
     $c = (Set-Reg $key 'BrowserGuestModeEnabled' 0 'DWord') -or $c
@@ -400,8 +326,9 @@ function Set-Browsers {
     # Firefox family: policies.json beside every installed copy (a registry policy would make Firefox
     # ignore policies.json, and the 37,000-site filter is too big for the registry).
     $ff = Get-Content -LiteralPath (Join-Path $Data 'firefox-policies.json') -Raw
-    # Same for Firefox: DNS over HTTPS may fall back while the family resolvers can't be reached.
-    if (-not (Get-FamilyOk)) { $ff = $ff -replace '"Fallback":\s*false', '"Fallback": true' }
+    # The shared Firefox policy (Linux too) locks DNS over HTTPS to family DNS: on Windows Thurea
+    # leaves DNS alone, so that part is taken out. Writing the file replaces an older version's lock.
+    $ff = [regex]::Replace($ff, '"DNSOverHTTPS"\s*:\s*\{[^{}]*\}\s*,?\s*', '')
     $dirs = New-Object System.Collections.Generic.HashSet[string]([StringComparer]::OrdinalIgnoreCase)
     foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}) + @(Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName 'AppData\Local' })) {
         if (-not $root -or -not (Test-Path $root)) { continue }
@@ -462,10 +389,7 @@ function Write-Status {
     $checks = [ordered]@{}
     $h = if (Test-Path $HostsFile) { [IO.File]::ReadAllText($HostsFile) } else { '' }
     if (Test-Path (Join-Path $Data 'hosts-block')) { $checks.hosts = $h.Contains($Begin) }
-    $checks.dns = -not (Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Where-Object {
-            (@((Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4).ServerAddresses) -join ',') -ne ($FamilyV4 -join ',') })
-    $checks.firewall = @(Get-NetFirewallRule -Group 'Thurea' -ErrorAction SilentlyContinue | Where-Object Enabled -eq 'True').Count -ge 3
-    $checks.browsers = -not ($Chromium.Values | Where-Object { (Get-Reg $_ 'DnsOverHttpsMode') -ne 'secure' })
+    $checks.browsers = -not ($Chromium.Values | Where-Object { (Get-Reg $_ 'ForceGoogleSafeSearch') -ne 1 -or (Get-Reg $_ 'IncognitoModeAvailability') -ne 1 })
     $checks.managed = Test-Managed
     $checks.extensionServer = Test-Server
     $missing = @(Test-ExtensionInstalled)
@@ -483,7 +407,7 @@ function Write-Status {
 function Invoke-Apply {
     Assert-Admin
     New-Item -ItemType Directory -Force -Path $State | Out-Null
-    $steps = [ordered]@{ managed = { Set-Managed }; hosts = { Set-Hosts }; dns = { Set-FamilyDns }; firewall = { Set-Firewall }; browsers = { Set-Browsers }
+    $steps = [ordered]@{ dns = { Restore-Dns }; managed = { Set-Managed }; hosts = { Set-Hosts }; browsers = { Set-Browsers }
         tasks = { Repair-Tasks }; appEntry = { Set-AppEntry }; startMenu = { Set-StartMenu }; tray = { Set-TrayAutostart } }
     # Edge stays removed only on PCs set up from the Thurea Windows ISO (it leaves this marker).
     if (Test-Path (Join-Path $State 'remove-edge')) { $steps.edge = { Remove-Edge } }
@@ -687,15 +611,13 @@ function Register-Tasks {
     $sys = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -RunLevel Highest
     $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
 
-    # Apply: at startup, every 5 minutes, and when Windows connects to a network.
+    # Apply: at startup and every 5 minutes (browser policies, the extension, blocked apps; never
+    # DNS). Versions up to 1.0.5 also ran it on every network change, to switch DNS: -Force
+    # replaces the old task, so that trigger goes.
     $boot = New-ScheduledTaskTrigger -AtStartup
     $every = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 5)
-    $cls = Get-CimClass -Namespace Root/Microsoft/Windows/TaskScheduler -ClassName MSFT_TaskEventTrigger
-    $net = New-CimInstance -CimClass $cls -ClientOnly
-    $net.Enabled = $true
-    $net.Subscription = '<QueryList><Query Id="0" Path="Microsoft-Windows-NetworkProfile/Operational"><Select Path="Microsoft-Windows-NetworkProfile/Operational">*[System[EventID=10000]]</Select></Query></QueryList>'
     $act = New-ScheduledTaskAction -Execute $ps -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$me`" -Apply"
-    Register-ScheduledTask -TaskName 'Thurea' -TaskPath '\Thurea\' -Action $act -Trigger @($boot, $every, $net) -Principal $sys -Settings $set -Force | Out-Null
+    Register-ScheduledTask -TaskName 'Thurea' -TaskPath '\Thurea\' -Action $act -Trigger @($boot, $every) -Principal $sys -Settings $set -Force | Out-Null
 
     # Update server for the extension: at startup, restarted if it stops.
     $set2 = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew

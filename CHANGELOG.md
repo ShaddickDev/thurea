@@ -12,10 +12,15 @@ Each release's section below is used as its GitHub release notes (`release/publi
   (`doh.cleanbrowsing.org/doh/family-filter/`) instead of its DNS-over-TLS host name.
 
 ### Windows
-- Fixed: on some networks, switching to family DNS left the PC with no internet at all. Thurea
-  now checks that Cloudflare for Families can be reached and that names still resolve before it
-  locks DNS. Where they can't, the network's own DNS stays (status shows DNS as not protected) and
-  Thurea tries again later.
+- Fixed: Thurea could break the PC's internet (some sites such as YouTube and Twitch first, then
+  everything) by switching DNS to Cloudflare for Families. Thurea for Windows now never changes
+  DNS: no adapter DNS servers, no Windows DNS over HTTPS, no browser secure-DNS policy and no
+  firewall rules on DNS traffic. Filtering is done by the Thurea extension, SafeSearch and the
+  blocked browsers.
+- Updating puts back what older versions changed, once: adapters still set to Cloudflare for
+  Families go back to the network's own DNS, and Thurea's DNS firewall rules, `DoHPolicy` and the
+  browsers' DNS-over-HTTPS policies are removed. The Thurea task no longer runs on every network
+  change (that was only for DNS); it still re-applies every 5 minutes and at startup.
 
 ## 1.0.5
 
