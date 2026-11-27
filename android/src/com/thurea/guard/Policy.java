@@ -33,6 +33,23 @@ final class Policy {
 
     static ComponentName admin(Context c) { return new ComponentName(c, AdminReceiver.class); }
 
+    /** Chrome's DNS-over-HTTPS address for a family DNS (its DNS-over-TLS host name). */
+    static String dohTemplate(String host) {
+        // CleanBrowsing serves DoH on one host with a path per filter, not on its DoT host names.
+        if (host.endsWith("-dns.cleanbrowsing.org")) return "https://doh.cleanbrowsing.org/doh/" + host.substring(0, host.length() - "-dns.cleanbrowsing.org".length()) + "/";
+        return "https://" + host + "/dns-query";
+    }
+
+    private static String dohHost(String host) { return Uri.parse(dohTemplate(host)).getHost(); }
+
+    /** Does this network let us connect to host:port (within a few seconds)? Off the main thread. */
+    static boolean reachable(String host, int port) {
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new java.net.InetSocketAddress(host, port), 5000);
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
     static boolean isOwner(Context c) {
         return c.getSystemService(DevicePolicyManager.class).isDeviceOwnerApp(c.getPackageName());
     }
@@ -53,9 +70,20 @@ final class Policy {
         // Restricted Mode in every app). Android looks the host up over the network here, which
         // it forbids on the main thread.
         final String familyDns = child ? plan.optString("dns_host", Native.familyHost(c)) : Native.familyHost(c);
+        // Some networks can't reach it (a router, ISP or hotspot that blocks DNS over TLS, port 853,
+        // or intercepts 1.1.1.x). Locking Private DNS there leaves the whole phone, Chrome included,
+        // with no internet at all, so it's locked only where it works; elsewhere Android uses
+        // it when it can (opportunistic) and Thurea tries again at every re-apply.
         final String[] dns = { "! Family DNS: timed out\n" };
+        final boolean[] doh = { false };
         Thread t = new Thread(() -> {
             try {
+                doh[0] = reachable(dohHost(familyDns), 443);
+                if (!reachable(familyDns, 853)) {
+                    if (dpm.getGlobalPrivateDnsMode(a) != DevicePolicyManager.PRIVATE_DNS_MODE_OPPORTUNISTIC) dpm.setGlobalPrivateDnsModeOpportunistic(a);
+                    dns[0] = "! Family DNS can't be reached on this network: using the network's own DNS until it can\n";
+                    return;
+                }
                 if (dpm.getGlobalPrivateDnsMode(a) == DevicePolicyManager.PRIVATE_DNS_MODE_PROVIDER_HOSTNAME
                         && familyDns.equals(dpm.getGlobalPrivateDnsHost(a))) { dns[0] = "✓ Family DNS locked on\n"; return; }
                 int res = dpm.setGlobalPrivateDnsModeSpecifiedHost(a, familyDns);
@@ -63,7 +91,7 @@ final class Policy {
             } catch (Exception e) { dns[0] = "! Family DNS: " + e + "\n"; }
         });
         t.start();
-        try { t.join(15000); } catch (InterruptedException ignored) {}
+        try { t.join(30000); } catch (InterruptedException ignored) {}
         try { dpm.addUserRestriction(a, UserManager.DISALLOW_CONFIG_PRIVATE_DNS); } catch (Exception ignored) {}
         r.append(dns[0]);
 
@@ -77,8 +105,10 @@ final class Policy {
 
         // 3. Chrome: managed settings (work even with ProtonVPN on — DNS is filtered inside Chrome).
         Bundle chrome = new Bundle();
-        chrome.putString("DnsOverHttpsMode", "secure");
-        chrome.putString("DnsOverHttpsTemplates", "https://" + familyDns + "/dns-query");
+        // "secure" never falls back, so it's used only when the family DoH server answers on this
+        // network; otherwise "automatic", or Chrome couldn't open any page at all.
+        chrome.putString("DnsOverHttpsMode", doh[0] ? "secure" : "automatic");
+        chrome.putString("DnsOverHttpsTemplates", dohTemplate(familyDns));
         chrome.putInt("SafeSitesFilterBehavior", 1);          // Google's safe-sites filter
         chrome.putBoolean("ForceGoogleSafeSearch", true);
         chrome.putInt("ForceYouTubeRestrict", child ? plan.optInt("youtube_restrict", 2) : 1);
