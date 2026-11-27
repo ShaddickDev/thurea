@@ -71,7 +71,6 @@ builds are on the release too: `thurea-extension.crx` (Chromium) and
 
 Parents managing their children's devices.
 
-
 Install Thurea on every device first (above) — the parents' own devices included: parents get
 the adult protection, children get the stricter one, and one family links them.
 
