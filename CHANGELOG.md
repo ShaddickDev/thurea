@@ -4,6 +4,10 @@ Each release's section below is used as its GitHub release notes (`release/publi
 
 ## 1.0.1
 
+**Install this release by hand once.** 1.0.1 is signed with a new release key, so a device on
+1.0.0 won't take it as an automatic update. After this, updates are automatic again. On Android,
+uninstall 1.0.0 first: the new APK is signed with a different key.
+
 ### Windows
 - Release-ready without a kernel driver: `Thurea.ps1` is the only enforcer, and `thurea install` /
   `apply` now go through it instead of applying their own, conflicting rules.
