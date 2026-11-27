@@ -39,9 +39,10 @@ omarea uninstall   # take it out of the desktop again (Thurea's protection stays
 omarchy plugin add https://github.com/ShaddickDev/thurea.git --enable   # the widget alone, from Omarchy's plugin manager
 ```
 
-**Windows 10 / 11.** Download `thurea-windows.zip`, extract it, right-click
-`Thurea\Install Thurea.cmd` → *Run as administrator*. (Or build the Thurea Windows 11 ISO from
-`windows/` for a fresh install.)
+**Windows 10 / 11.** Download `thurea-windows.msix` and double-click it: *Install*, then *Launch*
+("Thurea Setup") and say yes to the Administrator prompt. Or download `thurea-windows.zip`,
+extract it, right-click `Thurea\Install Thurea.cmd` → *Run as administrator*. Both install the
+same Thurea. (Or build the Thurea Windows 11 ISO from `windows/` for a fresh install.)
 Thurea for Windows uses no kernel driver, so it can't blue-screen the PC, and games with
 anti-cheat (Valorant's Vanguard, Easy Anti-Cheat, BattlEye) keep working: see
 [docs/windows.md](windows.md) for how it protects, what it's compatible with, and releasing.

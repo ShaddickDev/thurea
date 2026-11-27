@@ -41,7 +41,9 @@ same build with throwaway keys made in the run, with no secrets and nothing publ
 | `THUREA_WINDOWS_PFX`, `THUREA_WINDOWS_PFX_PASS` | a code-signing `.pfx` (base64) and its password | to Authenticode-sign the Windows files |
 
 Set the repository variable `THUREA_REQUIRE_SIGNED` to `1` to make a run fail rather than publish
-an unsigned Windows or Firefox build.
+an unsigned Windows or Firefox build. The repository variable `THUREA_MSIX_PUBLISHER` sets the
+MSIX installer's publisher; it must be the code-signing certificate's subject exactly, and with
+`THUREA_WINDOWS_PFX` it defaults to that (see [docs/windows.md](windows.md), "The MSIX installer").
 
 ## Push to release
 

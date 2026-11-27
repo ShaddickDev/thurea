@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Thurea Setup (thurea-windows.msix). release/build.sh fills in @VERSION@ and @PUBLISHER@.
+     The package holds only the installer: Thurea itself is installed outside the package by a
+     SYSTEM task (see Setup.ps1), because nothing inside the MSIX sandbox can set up Thurea's
+     protection. allowElevation lets ThureaSetup.exe ask for an Administrator. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap rescap">
+  <Identity Name="Thurea.Setup" Publisher="@PUBLISHER@" Version="@VERSION@" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Thurea Setup</DisplayName>
+    <PublisherDisplayName>Thurea</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-gb" />
+  </Resources>
+  <Applications>
+    <Application Id="ThureaSetup" Executable="ThureaSetup.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Thurea Setup" Description="Installs Thurea on this PC"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="allowElevation" />
+  </Capabilities>
+</Package>

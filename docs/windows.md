@@ -91,6 +91,40 @@ no longer an option for a new certificate. Two ways that work from Linux:
 `jsign` signs `.exe` and `.ps1` alike. The tray app is compiled in the release with `mcs` (mono) so
 it can be signed; without `mcs`, every PC compiles its own unsigned copy at install, as before.
 
+## The MSIX installer
+
+Each release also has `thurea-windows.msix` ("Thurea Setup"), built by `release/build.sh` from
+`windows/msix/` and packed by `release/msix.py`. It installs the same Thurea as the zip.
+
+**Thurea's protection does not run inside the MSIX sandbox, so the package doesn't try to.** A
+packaged app's registry and AppData writes can be redirected into the package, its folder
+(`WindowsApps\…`) changes with every version and can't be locked down, it gets no install-time
+actions, and any user can remove it from Settings > Apps. Firewall rules, family DNS, browser
+policies, SYSTEM tasks and a locked `Program Files\Thurea` can't live there. So the package is
+only a launcher: `ThureaSetup.exe` asks for an Administrator (the `allowElevation` capability),
+then `Setup.ps1` runs `Thurea.ps1 -Install` from the package as a one-off **SYSTEM task**, which
+runs outside the package and copies Thurea to `Program Files\Thurea` exactly as
+`Install Thurea.cmd` does. From then on Thurea updates itself from the zip in each release, as
+before. Removing "Thurea Setup" from Settings > Apps removes only the launcher; Thurea stays.
+It never installs an older Thurea over a newer one.
+
+**Signing.** Windows installs an MSIX only if it is signed by a certificate the PC trusts, and the
+manifest's `Publisher` must be exactly that certificate's subject (`THUREA_MSIX_PUBLISHER`;
+`release/ci/run.sh` reads it from `THUREA_WINDOWS_PFX` when that is set). The same
+`THUREA_SIGN_CMD` signs it (jsign signs `.msix` too). Options:
+
+* **Azure Trusted Signing**: trusted on every PC, no prompts. Set `THUREA_MSIX_PUBLISHER` to the
+  subject of the certificate profile (Azure portal → the profile → *Subject name*).
+* **An OV/EV code-signing certificate** (USB token or cloud HSM): the same.
+* **A self-signed certificate**: works only on PCs where an Administrator first imports it into
+  *Local Machine → Trusted People*. Fine for your own family's PCs, not for anyone else.
+* **The Microsoft Store** signs packages itself, but Thurea Setup needs `allowElevation` and sets up
+  system-wide protection, which Store review may refuse. Not used.
+
+Without signing, the build still makes the MSIX with Windows' "unsigned" publisher, which installs
+only for testing (`Add-AppxPackage -AllowUnsigned`, Windows 11); `THUREA_REQUIRE_SIGNED=1` makes
+that a failure instead.
+
 ## Release checklist (Windows)
 
 1. `release/build.sh` on a machine with `mcs`, the `x86_64-pc-windows-gnu` Rust target and
@@ -101,6 +135,9 @@ it can be signed; without `mcs`, every PC compiles its own unsigned copy at inst
    * Smart App Control in evaluation or on: the tray starts, `Thurea.ps1 -Apply` runs in Full
      Language Mode (`thurea.log` shows no `FAILED`);
    * `Get-AuthenticodeSignature` reports `Valid` for the three signed files.
+   * `thurea-windows.msix`: double-click → Install → Launch, approve the Administrator prompt; the
+     window ends with every item `ok`. Then remove "Thurea Setup" in Settings > Apps and check
+     `Thurea.ps1 -Status` is still all `ok`.
 3. On a real PC with Valorant (Vanguard), and a game with Easy Anti-Cheat, installed: install
    Thurea, reboot, play a match. Check `vgc` and Easy Anti-Cheat stay running with a child's
    account that has a screen-time limit on the game.

@@ -16,19 +16,36 @@ umask 077; mkdir -p "$K"
 VER=$(tr -d '[:space:]' < "$R/release/VERSION")
 REPO=${GITHUB_REPOSITORY:-ShaddickDev/thurea}
 
+# The MSIX Publisher for the code-signing certificate in $K/windows-signing.pfx: its subject in
+# the form Windows shows it ("CN=Name, O=Org, L=Town, S=County, C=GB").
+msix_publisher() {
+  openssl pkcs12 -in "$K/windows-signing.pfx" -passin file:"$K/windows-signing-pass" -nokeys -clcerts 2>/dev/null \
+    | openssl x509 -noout -subject -nameopt RFC2253 | python3 -I "$R/release/ci/msix-publisher.py"
+}
+
 if [ "$MODE" = test ]; then
   echo "== Test build of $VER with throwaway keys (nothing is published)"
-  unset AMO_JWT_ISSUER AMO_JWT_SECRET THUREA_SIGN_CMD
+  unset AMO_JWT_ISSUER AMO_JWT_SECRET THUREA_SIGN_CMD THUREA_MSIX_PUBLISHER
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$K/release-key.pem" 2>/dev/null
   openssl pkey -in "$K/release-key.pem" -pubout -out "$R/release/release-key.pub.pem"
   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$K/extension-key.pem" 2>/dev/null
   openssl rand -hex 24 > "$K/android-keystore-pass"
   keytool -genkeypair -noprompt -keystore "$K/android-release.jks" -storetype PKCS12 \
     -storepass:file "$K/android-keystore-pass" -alias thurea -keyalg RSA -keysize 2048 -validity 2 -dname CN=thurea-ci-test
+  # A throwaway self-signed code-signing certificate, so the Authenticode and MSIX signing run too.
+  openssl req -x509 -newkey rsa:3072 -nodes -days 2 -subj "/C=GB/O=Thurea/CN=Thurea CI Test" \
+    -addext keyUsage=critical,digitalSignature -addext extendedKeyUsage=codeSigning \
+    -keyout "$K/windows-signing.key" -out "$K/windows-signing.crt" 2>/dev/null
+  openssl rand -hex 24 > "$K/windows-signing-pass"
+  openssl pkcs12 -export -inkey "$K/windows-signing.key" -in "$K/windows-signing.crt" -name Thurea \
+    -passout file:"$K/windows-signing-pass" -out "$K/windows-signing.pfx"
+  rm -f "$K/windows-signing.key"
+  export THUREA_SIGN_CMD="$R/release/ci/sign-windows.sh"
+  export THUREA_MSIX_PUBLISHER=$(msix_publisher)
   umask 022  # the keys above stay private; the packages need normal permissions
   "$R/release/build.sh" "$VER"
   D=$R/dist
-  for f in "$D"/thurea-*.{crx,xpi,zst,deb,rpm,zip,apk}; do
+  for f in "$D"/thurea-*.{crx,xpi,zst,deb,rpm,zip,msix,apk}; do
     python3 -I "$R/release/check-public.py" --assets "$f" || { echo "private-feature check failed on ${f##*/}"; rpm -qp --qf '%{RPMFORMAT}\n' "$D/thurea-linux.rpm" 2>/dev/null; bsdtar -tf "$f" 2>&1 | head -5; exit 1; }
   done
   echo "== Test build OK: $(ls "$D" | tr '\n' ' ')"
@@ -56,6 +73,8 @@ if [ -n "${THUREA_WINDOWS_PFX:-}" ]; then
   printf '%s' "$THUREA_WINDOWS_PFX" | tr -d '[:space:]' | base64 -d > "$K/windows-signing.pfx"
   printf '%s\n' "$THUREA_WINDOWS_PFX_PASS" | head -1 > "$K/windows-signing-pass"
   export THUREA_SIGN_CMD="$R/release/ci/sign-windows.sh"
+  # The repository variable THUREA_MSIX_PUBLISHER wins; otherwise the certificate's own subject.
+  [ -n "${THUREA_MSIX_PUBLISHER:-}" ] || export THUREA_MSIX_PUBLISHER=$(msix_publisher)
 fi
 unset THUREA_RELEASE_KEY THUREA_EXTENSION_KEY THUREA_ANDROID_KEYSTORE THUREA_ANDROID_KEYSTORE_PASS THUREA_WINDOWS_PFX THUREA_WINDOWS_PFX_PASS
 [ "${THUREA_REQUIRE_SIGNED:-}" = 1 ] || unset THUREA_REQUIRE_SIGNED
