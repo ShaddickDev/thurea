@@ -4,7 +4,7 @@ Thurea Setup, run (as Administrator) by ThureaSetup.exe from thurea-windows.msix
 
 An MSIX app runs in a container: its registry and AppData writes can be redirected, it can be
 removed by any user from Settings > Apps, and its folder changes with every version. Thurea's
-protection (firewall, DNS, browser policies, SYSTEM tasks, locked-down Program Files\Thurea)
+protection (browser policies, SYSTEM tasks, locked-down Program Files\Thurea)
 can't live there. So this hands the install to a one-off SYSTEM task, which runs outside the
 package: Thurea.ps1 -Install copies Thurea from the package to Program Files\Thurea, exactly as
 "Install Thurea.cmd" from the zip does. After that the package is only a launcher, and removing

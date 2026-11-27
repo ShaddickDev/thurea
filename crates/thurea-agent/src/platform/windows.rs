@@ -33,8 +33,8 @@ fn powershell(script: &str) -> Result<String, String> {
 
 // ── Enforcement: Thurea.ps1 is the only enforcer on Windows ──
 //
-// Thurea for Windows is enforced by Thurea.ps1 (its "\Thurea\Thurea" task, every 5 minutes, at
-// startup and on network changes). thurea.exe used to have its own enforcement here too, with a
+// Thurea for Windows is enforced by Thurea.ps1 (its "\Thurea\Thurea" task, every 5 minutes and at
+// startup). It never changes DNS. thurea.exe used to have its own enforcement here too, with a
 // different idea of the rules (the full hosts file, which stalls Windows' DNS Client for minutes;
 // no DNS fallback; its own startup task), and the two would undo each other. Now thurea.exe only
 // asks Thurea.ps1 and reads what it reports, so there is exactly one set of rules on the PC.
@@ -60,8 +60,6 @@ fn run_enforcer(arg: &str) -> Result<String, String> {
 fn check_label(id: &str) -> &str {
     match id {
         "hosts" => "hosts file block list",
-        "dns" => "family DNS on every adapter",
-        "firewall" => "firewall DNS lockdown",
         "browsers" => "browser policies",
         "managed" => "browsers accept the Thurea extension",
         "extensionServer" => "extension update server",

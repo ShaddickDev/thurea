@@ -724,7 +724,7 @@ namespace Thurea
             var credits = new LinkLabel
             {
                 Text = "Verses: World English Bible (public domain). Adult-site list: StevenBlack/hosts (MIT) and The Block List Project (Unlicense). "
-                     + "Filters: EasyList / EasyPrivacy (GPL-3.0 or CC BY-SA 3.0). Family DNS: Cloudflare for Families. All credits",
+                     + "Filters: EasyList / EasyPrivacy (GPL-3.0 or CC BY-SA 3.0). All credits",
                 AutoSize = false, Width = W, Height = 64, ForeColor = Theme.Muted, LinkColor = Theme.Accent, ActiveLinkColor = Theme.Accent,
                 BackColor = Color.Transparent, Font = new Font("Segoe UI", 8.5f), Margin = new Padding(0, 12, 0, 0)
             };

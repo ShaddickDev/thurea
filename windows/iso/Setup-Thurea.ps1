@@ -3,7 +3,7 @@
 #   1. Helium installed for all users and made the default browser for every new account
 #   +  the GPU driver for this PC's graphics card (Intel Arc, NVIDIA or AMD) from the install media
 #   2. Microsoft Edge removed (WebView2, which Windows and apps use internally, stays)
-#   3. Thurea installed (hosts, family DNS, firewall, browsers, Thurea extension, tray app)
+#   3. Thurea installed (browsers, Thurea extension, tray app)
 $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 Start-Transcript -Path (Join-Path $Here 'setup-thurea.log') -Append -Force | Out-Null
