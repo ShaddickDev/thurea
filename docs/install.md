@@ -4,7 +4,9 @@ Every file is on the [latest release](https://github.com/ShaddickDev/thurea/rele
 installed copies keep themselves up to date. **Thurea is meant to stay:** once installed, the
 package manager refuses to remove it (that's the point — on a weak day, it holds).
 
-## For yourself
+## Single adult
+
+Just you protecting your own devices: install below and you are done. No family is needed.
 
 **Arch / Omarchy**
 
@@ -65,7 +67,9 @@ builds are on the release too: `thurea-extension.crx` (Chromium) and
 `thurea-extension-firefox.xpi` (Firefox family: open the file in the browser to add it). See
 [extension/README.md](../extension/README.md).
 
-## For a family
+## Family
+
+Parents managing their children's devices.
 
 Install Thurea on every device first (above) — the parents' own devices included: parents get
 the adult protection, children get the stricter one, and one family links them.

@@ -9,7 +9,12 @@ hard to switch off.
 ## Install
 
 Get the files from the [latest release](https://github.com/ShaddickDev/thurea/releases/latest).
-Thurea updates itself and can't be removed once installed: that's the point.
+Thurea updates itself and can't be removed once installed: that's the point. Both kinds of install
+use the same files; a family is something you add afterwards.
+
+### Single adult
+
+Protect your own devices. No family, no parent or child roles.
 
 ```sh
 # Arch / Omarchy
@@ -25,14 +30,20 @@ sudo apt install ./thurea-linux.deb
 sudo dnf install https://github.com/ShaddickDev/thurea/releases/latest/download/thurea-linux.rpm
 ```
 
-* **Windows 10 / 11:** extract `thurea-windows.zip`, right-click `Thurea\Install Thurea.cmd` →
-  *Run as administrator*.
-* **Android:** on a computer with Thurea, open **Set up a phone** (new phone) or **Keep my phone**
-  (phone in use, nothing erased) and scan the code.
+* **Windows 10 / 11:** double-click `thurea-windows.msix` → *Install* → *Launch*. (Or extract
+  `thurea-windows.zip` and right-click `Thurea\Install Thurea.cmd` → *Run as administrator*.)
+* **Your phone:** on a computer with Thurea, open **Keep my phone** (nothing erased) or
+  **Set up a phone** (new phone) and scan the code.
 * **Browser extension:** nothing to do. Every desktop install puts it in every Chrome-family and
   Firefox-family browser.
-* **A family:** `sudo thurea init` on the first computer, `sudo thurea join CODE` on the rest,
-  then **Family** → *Start a family* on a parent's device.
+
+### Family
+
+Parents manage their children's devices. Install as above on every device, parents' included, then:
+
+1. `sudo thurea init` on the first computer, `sudo thurea join CODE` on the rest.
+2. **Family** → *Start a family* on a parent's device.
+3. Set up each child's phone with **Set up a phone**, then mark it *A child's device*.
 
 Every option and the full family setup: [docs/install.md](docs/install.md).
 
