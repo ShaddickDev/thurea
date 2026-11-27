@@ -241,7 +241,7 @@ cp "$R/target/x86_64-pc-windows-gnu/release/thurea.exe" "$W/thurea.exe"
 # The tray app, built here so the release can ship it signed. Without mcs (mono), Thurea.ps1
 # compiles it on each PC at install, and that copy is unsigned (Smart App Control may block it).
 if command -v mcs >/dev/null; then
-  mcs -nologo -target:winexe -optimize+ -out:"$W/ThureaTray.exe" -r:System.Windows.Forms.dll -r:System.Drawing.dll \
+  mcs -nologo -target:winexe -optimize+ -win32icon:"$W/thurea.ico" -out:"$W/ThureaTray.exe" -r:System.Windows.Forms.dll -r:System.Drawing.dll \
       -r:System.Web.Extensions.dll -r:System.Core.dll "$W"/tray/*.cs >> "$B/tray.log" 2>&1 || { cat "$B/tray.log"; echo "tray app build failed"; exit 1; }
 else
   echo "   (no mcs: ThureaTray.exe will be compiled on each PC, unsigned)"
@@ -289,8 +289,8 @@ if command -v mcs >/dev/null; then
   cp -r "$W/." "$M/Thurea/"
   cp "$D/thurea-windows.zip" "$M/Thurea/windows/thurea-windows.zip"
   sed "s/\r\?$/\r/" "$R/windows/msix/Setup.ps1" > "$M/Setup.ps1"
-  for a in StoreLogo Square150x150Logo Square44x44Logo; do cp "$R/extension/icons/icon128.png" "$M/Assets/$a.png"; done
-  mcs -nologo -target:winexe -optimize+ -out:"$M/ThureaSetup.exe" -r:System.Windows.Forms.dll "$R/windows/msix/ThureaSetup.cs" >> "$B/msix.log" 2>&1 \
+  cp "$R"/windows/msix/Assets/*.png "$M/Assets/"
+  mcs -nologo -target:winexe -optimize+ -win32icon:"$R/windows/thurea/thurea.ico" -out:"$M/ThureaSetup.exe" -r:System.Windows.Forms.dll "$R/windows/msix/ThureaSetup.cs" >> "$B/msix.log" 2>&1 \
     || { cat "$B/msix.log"; echo "ThureaSetup.exe build failed"; exit 1; }
   MSIX_PUBLISHER=${THUREA_MSIX_PUBLISHER:-}; MSIX_SIGN=false
   if [ -n "${THUREA_SIGN_CMD:-}" ] && [ -n "$MSIX_PUBLISHER" ]; then MSIX_SIGN=true
