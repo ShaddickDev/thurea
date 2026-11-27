@@ -28,7 +28,10 @@ for i in "${!ASSETS[@]}"; do ASSETS[i]="$D/${ASSETS[i]}"; done
 python3 "$R/release/check-public.py" --assets "${ASSETS[@]}"
 echo "Publishing Thurea $VER to github.com/$REPO"
 # Release notes: the fixed intro, then this version's section of CHANGELOG.md if it has one.
-NOTES="Thurea $VER for Windows, Linux (Arch / Omarchy, Debian / Ubuntu, Fedora) and Android. Installed copies update themselves; every file is checked against the signed thurea-manifest.json."
+NOTES="Thurea $VER for Windows, Linux (Arch / Omarchy, Debian / Ubuntu, Fedora) and Android. Installed copies update themselves; every file is checked against the signed thurea-manifest.json.
+
+**Single adult** (just your own devices): install the file for your system below and you are done.
+**Family** (parents and children): the same files on every device, then follow [Family setup](https://github.com/ShaddickDev/thurea/blob/master/docs/install.md#family)."
 CHANGES=$(awk -v v="$VER" '/^## /{f = ($2 == v); next} f' "$R/CHANGELOG.md" 2>/dev/null || true)
 [ -n "$CHANGES" ] && NOTES="$NOTES"$'\n\n'"$CHANGES"
 # THUREA_TARGET (a commit) tags that commit when the tag doesn't exist yet (the GitHub workflow).
