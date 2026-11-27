@@ -12,6 +12,10 @@
 //!   5. signs the accounts back in (Thurea fills in the email; you do the password / passkey);
 //!   6. switches Wireless debugging off again.
 //!
+//! `thurea update-phone` does steps 1 and 2 only: it installs this computer's Thurea over the one
+//! on the phone (same app, same signing key) and never signs anything out, whether Thurea is the
+//! device owner, a device admin, or was taken off the phone.
+//!
 //! It needs `adb`: Android's open-source tools (Arch: `android-tools`, Apache-2.0).
 //!
 //! With `--tray` it prints the line format the tray apps read (`m\t<0/1 row>` for the QR,
@@ -150,16 +154,16 @@ fn devices(adb: &Adb) -> Vec<String> {
     adb.raw(&["devices"]).1.lines().skip(1).filter_map(|l| l.strip_suffix("\tdevice").map(str::to_string)).collect()
 }
 
-pub fn run(apk: Option<PathBuf>, tray: bool) -> Result<String, String> {
+pub fn run(apk: Option<PathBuf>, tray: bool, update_only: bool) -> Result<String, String> {
     let out = Out { tray };
-    let r = run_inner(&out, apk);
+    let r = run_inner(&out, apk, update_only);
     if let Err(e) = &r {
         out.line(&["error", e]);
     }
     r
 }
 
-fn run_inner(out: &Out, apk: Option<PathBuf>) -> Result<String, String> {
+fn run_inner(out: &Out, apk: Option<PathBuf>, update_only: bool) -> Result<String, String> {
     let bin = find_adb().ok_or(if cfg!(windows) {
         "adb isn't on this PC. Install Android's platform tools, then try again."
     } else {
@@ -231,13 +235,13 @@ fn run_inner(out: &Out, apk: Option<PathBuf>) -> Result<String, String> {
     let owners = adb.sh("dpm list-owners");
     let already = owners.contains(PKG);
     // Before anything is signed out: a phone another app manages can't take Thurea as its owner.
-    if !already {
+    if !already && !update_only {
         if let Some(other) = other_owner(&owners) {
             return Err(format!("Another app already manages this phone ({other}). Nothing was changed."));
         }
     }
     let users = adb.sh("pm list users").matches("UserInfo{").count();
-    if !already && users > 1 {
+    if !already && !update_only && users > 1 {
         return Err(format!(
             "The phone has {users} users or profiles (Secure Folder, Dual Messenger, a work profile or a guest). Remove the extra ones, then try again."
         ));
@@ -271,11 +275,13 @@ fn run_inner(out: &Out, apk: Option<PathBuf>) -> Result<String, String> {
         let _ = adb.sh(&c);
     };
 
-    if already {
+    if already || update_only {
         let _ = adb.sh(&format!("am start -n {PKG}/.MainActivity"));
         let _ = adb.sh("settings put global adb_wifi_enabled 0");
         out.event("done", "updated");
-        return Ok("Thurea was already in charge of this phone; it's updated.".into());
+        let have = adb.sh(&format!("dumpsys package {PKG}"));
+        let ver = have.lines().map(str::trim).find_map(|l| l.strip_prefix("versionName=")).map(|v| format!(" {v}")).unwrap_or_default();
+        return Ok(format!("Thurea{ver} is on the phone; your accounts weren't touched."));
     }
 
     // ── 4. Accounts out for a moment (Android requires it once) ──

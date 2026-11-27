@@ -7,6 +7,7 @@
 #   phone-setup.sh          set up, or update a Thurea that is already device owner or device admin
 #   phone-setup.sh check    show what would happen, change nothing
 #   phone-setup.sh owner    make a device-admin Thurea the device owner (signs accounts out once)
+#   phone-setup.sh update   only install Thurea over what's on the phone; never signs anything out
 #
 # Updating never signs anything out: Thurea is installed over itself (same package, same signing
 # key), as its own hourly update does. Only becoming device owner the first time needs the phone
@@ -80,6 +81,12 @@ n=$(adb devices | grep -c "device$")
 [ "$n" = 1 ] || { say "STOP: connect exactly one phone with USB debugging on, and tap Allow on the phone. Found: $n"; exit 1; }
 say "Phone: $(sh getprop ro.product.manufacturer) $(sh getprop ro.product.model), Android $(sh getprop ro.build.version.release)"
 [ "$(sh getprop ro.build.version.sdk)" -ge 29 ] || { say "STOP: Android 10 or newer is needed."; exit 1; }
+if [ "${1:-}" = update ]; then
+  say "Updating Thurea only — your accounts stay signed in."
+  install_thurea || exit 1; grant; sh am start -n com.thurea.guard/.MainActivity >/dev/null
+  say "Done: Thurea $(sh dumpsys package com.thurea.guard | grep -m1 versionName= | sed 's/.*versionName=//') is on the phone."
+  exit 0
+fi
 if [ "${1:-}" != check ] && sh dpm list-owners | grep -q "Device Owner"; then
   if sh dpm list-owners | grep -q com.thurea.guard; then say "Thurea is already the device owner — updating it."; install_thurea || exit 1; grant; sh am start -n com.thurea.guard/.MainActivity >/dev/null; pin_apps; app_stores; say "Done."; exit 0; fi
   say "STOP: another app already manages this phone:"; sh dpm list-owners; exit 1
