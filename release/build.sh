@@ -316,12 +316,14 @@ open(out, "w", encoding="utf-8").write(t.replace("@VERSION@", ver).replace("@PUB
       || { echo "thurea-windows.msix: the signature has no certificate, so Windows can't open it"; exit 1; }
     echo "   msix: signed, publisher $MSIX_PUBLISHER"
     # A self-signed certificate (THUREA_SIGN_CERT, its public half) is trusted only where an
-    # Administrator has imported it: Trust-Thurea.cmd does that in one click, once per PC.
+    # Administrator has imported it: Install-Thurea.cmd does that and installs, in one click.
     if [ -n "${THUREA_SIGN_CERT:-}" ] && [ "$(openssl x509 -in "$THUREA_SIGN_CERT" -noout -subject -nameopt RFC2253 | cut -d= -f2-)" \
         = "$(openssl x509 -in "$THUREA_SIGN_CERT" -noout -issuer -nameopt RFC2253 | cut -d= -f2-)" ]; then
       CERT_B64=$(openssl x509 -in "$THUREA_SIGN_CERT" -outform DER | base64 -w0)
-      sed "s|@CERT@|$CERT_B64|" "$R/windows/msix/Trust-Thurea.cmd" | sed "s/\r\?$/\r/" > "$D/Trust-Thurea.cmd"
-      echo "   self-signed: Trust-Thurea.cmd trusts it on a PC"
+      for f in Trust-Thurea.cmd Install-Thurea.cmd; do
+        sed "s|@CERT@|$CERT_B64|" "$R/windows/msix/$f" | sed "s/\r\?$/\r/" > "$D/$f"
+      done
+      echo "   self-signed: Install-Thurea.cmd trusts it and installs; Trust-Thurea.cmd only trusts it"
     fi
   else
     echo "   WARNING: thurea-windows.msix is NOT signed, so Windows won't install it (set THUREA_SIGN_CMD and THUREA_MSIX_PUBLISHER)"

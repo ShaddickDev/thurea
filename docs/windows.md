@@ -117,9 +117,12 @@ manifest's `Publisher` must be exactly that certificate's subject (`THUREA_MSIX_
   subject of the certificate profile (Azure portal → the profile → *Subject name*).
 * **An OV/EV code-signing certificate** (USB token or cloud HSM): the same.
 * **A self-signed certificate** (what Thurea uses now): works only on PCs that trust it. Each
-  release then also has `Trust-Thurea.cmd`, made from the certificate (`THUREA_SIGN_CERT`): run it
-  once on a PC (it asks for an Administrator) and it adds the certificate to *Local Machine →
-  Trusted People*; after that `thurea-windows.msix` installs there. Fine for your own family's
+  release then also has **`Install-Thurea.cmd`**, made from the certificate (`THUREA_SIGN_CERT`):
+  double-click it and say yes to the one Administrator prompt. It adds the certificate to *Local
+  Machine → Trusted People* and *Trusted Root* (otherwise Windows refuses the MSIX with
+  0x800B010A), installs `thurea-windows.msix` (the copy next to it, or else the latest release),
+  then runs Thurea Setup. The trust step can't be inside the MSIX, because Windows checks the
+  certificate before anything in the package runs. `Trust-Thurea.cmd` does only the trust step. Fine for your own family's
   PCs, not for anyone else. It doesn't make SmartScreen or Smart App Control trust the `.exe` files.
 * **The Microsoft Store** signs packages itself, but Thurea Setup needs `allowElevation` and sets up
   system-wide protection, which Store review may refuse. Not used.

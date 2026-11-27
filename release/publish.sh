@@ -10,7 +10,7 @@ openssl dgst -sha256 -verify "$R/release/release-key.pub.pem" -signature "$D/thu
 ASSETS=(thurea-extension.crx thurea-extension-firefox.xpi thurea-linux.pkg.tar.zst thurea-linux.deb thurea-linux.rpm thurea-windows.zip thurea-android.apk)
 [ -f "$D/thurea-windows.msix" ] && ASSETS+=(thurea-windows.msix)
 # Not in the signed manifest (nothing updates from it): trusts a self-signed signing certificate.
-EXTRA=(); [ -f "$D/Trust-Thurea.cmd" ] && EXTRA+=("$D/Trust-Thurea.cmd")
+EXTRA=(); for f in Install-Thurea.cmd Trust-Thurea.cmd; do [ -f "$D/$f" ] && EXTRA+=("$D/$f"); done
 VER=$(python3 - "$D" "${ASSETS[@]}" <<'PY'
 import hashlib, json, sys
 d = sys.argv[1]; m = json.load(open(f"{d}/thurea-manifest.json"))
