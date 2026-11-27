@@ -77,6 +77,7 @@ namespace Thurea
         public static readonly string Apk = Path.Combine(Home, "android", "Thurea.apk");
         public static readonly string WinZip = Path.Combine(Home, "windows", "thurea-windows.zip");
         public static readonly string Credits = Path.Combine(Home, "CREDITS.md");
+        public static readonly string License = Path.Combine(Home, "LICENSE");
     }
 
     static class Prefs
@@ -623,6 +624,7 @@ namespace Thurea
         readonly Panel verseCard = new Panel();
         readonly Label verseText = Theme.Label("", 12f, Theme.Text, FontStyle.Italic);
         readonly Label verseRef = Theme.Label("", 9f, Theme.Muted);
+        readonly Label about = Theme.Label("", 10f, Theme.Text);
         readonly FlowLayoutPanel home = CreatePage();
         readonly FlowLayoutPanel settings = CreatePage();
         readonly ToolTip hints = new ToolTip();
@@ -666,13 +668,12 @@ namespace Thurea
             verseCard.Controls.Add(verseRef);
             home.Controls.Add(verseCard);
 
-            var actions = new FlowLayoutPanel { Width = W, Height = 96, BackColor = Color.Transparent, Margin = new Padding(0, 10, 0, 0) };
+            var actions = new FlowLayoutPanel { Width = W, Height = 48, BackColor = Color.Transparent, Margin = new Padding(0, 10, 0, 0) };
             var phoneBtn = Theme.Button("Set up a phone", true); phoneBtn.Width = 150; phoneBtn.Click += delegate { tray.ShowPhone(); };
             var shareBtn = Theme.Button("Another device", false); shareBtn.Width = 140; shareBtn.Click += delegate { tray.ShowShare(); };
-            var applyBtn = Theme.Button("Re-apply", false); applyBtn.Width = 130; applyBtn.Click += delegate { tray.Reapply(); };
             // Parents' control center: children's requests, rules, devices (thurea.exe control-center).
-            var familyBtn = Theme.Button("Family", false); familyBtn.Width = 150; familyBtn.Click += delegate { tray.OpenFamily(); };
-            actions.Controls.AddRange(new Control[] { phoneBtn, shareBtn, applyBtn, familyBtn });
+            var familyBtn = Theme.Button("Family", false); familyBtn.Width = 130; familyBtn.Click += delegate { tray.OpenFamily(); };
+            actions.Controls.AddRange(new Control[] { phoneBtn, shareBtn, familyBtn });
             home.Controls.Add(actions);
 
             var settingsHeader = new Panel { Width = W, Height = 48, Margin = Padding.Empty };
@@ -686,12 +687,46 @@ namespace Thurea
             AddSetting("verses", "Verse of the day", "A Bible verse here each day (World English Bible)");
             AddSetting("animation", "Opening animation", "The Thurea logo draws itself when Thurea opens");
 
+            // Protection: re-apply now instead of waiting for the 5-minute check.
+            AddHeading("Protection");
+            var applyBtn = Theme.Button("Re-apply protection now", false);
+            applyBtn.Width = 220;
+            applyBtn.Margin = new Padding(0, 8, 0, 2);
+            applyBtn.Click += delegate { tray.Reapply(); };
+            settings.Controls.Add(applyBtn);
+            var applyHelp = Theme.Label("Thurea also checks and re-applies by itself every 5 minutes. Needs Administrator.", 9f, Theme.Muted);
+            applyHelp.Size = new Size(W, 22);
+            applyHelp.Margin = new Padding(0, 0, 0, 4);
+            settings.Controls.Add(applyHelp);
+
+            // About: version, copyright and licence.
+            AddHeading("About");
+            about.Size = new Size(W, 22);
+            about.Margin = new Padding(0, 6, 0, 0);
+            settings.Controls.Add(about);
+            var copyright = new LinkLabel
+            {
+                Text = "\u00a9 2026 Luke Shaddick (ShaddickDev). Free and open source under the MIT License. Licence",
+                AutoSize = false, Width = W, Height = 40, ForeColor = Theme.Muted, LinkColor = Theme.Accent, ActiveLinkColor = Theme.Accent,
+                BackColor = Color.Transparent, Font = new Font("Segoe UI", 9f), Margin = new Padding(0, 4, 0, 0)
+            };
+            copyright.LinkArea = new LinkArea(copyright.Text.Length - "Licence".Length, "Licence".Length);
+            copyright.LinkClicked += delegate { try { Process.Start("notepad.exe", "\"" + Paths.License + "\""); } catch (Exception) { } };
+            settings.Controls.Add(copyright);
+            var source = new LinkLabel
+            {
+                Text = "github.com/ShaddickDev/thurea", AutoSize = true, LinkColor = Theme.Accent, ActiveLinkColor = Theme.Accent,
+                BackColor = Color.Transparent, Font = new Font("Segoe UI", 9f), Margin = new Padding(0, 2, 0, 0)
+            };
+            source.LinkClicked += delegate { try { Process.Start(new ProcessStartInfo("https://github.com/ShaddickDev/thurea") { UseShellExecute = true }); } catch (Exception) { } };
+            settings.Controls.Add(source);
+
             var credits = new LinkLabel
             {
                 Text = "Verses: World English Bible (public domain). Adult-site list: StevenBlack/hosts (MIT) and The Block List Project (Unlicense). "
                      + "Filters: EasyList / EasyPrivacy (GPL-3.0 or CC BY-SA 3.0). Family DNS: Cloudflare for Families. All credits",
                 AutoSize = false, Width = W, Height = 64, ForeColor = Theme.Muted, LinkColor = Theme.Accent, ActiveLinkColor = Theme.Accent,
-                BackColor = Color.Transparent, Font = new Font("Segoe UI", 8.5f), Margin = new Padding(0, 18, 0, 0)
+                BackColor = Color.Transparent, Font = new Font("Segoe UI", 8.5f), Margin = new Padding(0, 12, 0, 0)
             };
             credits.LinkArea = new LinkArea(credits.Text.Length - "All credits".Length, "All credits".Length);
             credits.LinkClicked += delegate { try { Process.Start("notepad.exe", "\"" + Paths.Credits + "\""); } catch (Exception) { } };
@@ -717,6 +752,14 @@ namespace Thurea
             button.AccessibleName = label;
             hints.SetToolTip(button, label);
             return button;
+        }
+
+        void AddHeading(string text)
+        {
+            var heading = Theme.Label(text.ToUpperInvariant(), 8.5f, Theme.Accent, FontStyle.Bold);
+            heading.Size = new Size(W, 18);
+            heading.Margin = new Padding(0, 18, 0, 0);
+            settings.Controls.Add(heading);
         }
 
         void AddSetting(string key, string label, string description)
@@ -770,6 +813,7 @@ namespace Thurea
             logo.Warning = s.Known && !s.Ok;
             logo.Invalidate();
             version.Text = s.Version != "" ? "Thurea " + s.Version + (s.Known ? ", checked " + s.At.ToString("t") : "") : "";
+            about.Text = (s.Version != "" ? "Thurea " + s.Version : "Thurea") + "  \u00b7  family protection that blocks ads and harmful sites";
 
             var v = Prefs.Get("verses") ? Verses.Today() : null;
             verseCard.Visible = v != null;

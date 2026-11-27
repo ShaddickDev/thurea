@@ -6,7 +6,7 @@ pkgrel=1
 pkgdesc="Thurea: harmful-site and ad blocker managed by the system (hosts block, family DNS, browser policies, force-installed Thurea extension), self-updating from signed GitHub releases"
 arch=(x86_64)
 url="https://github.com/ShaddickDev/thurea"
-license=(custom)
+license=(MIT)
 depends=(systemd e2fsprogs python nftables openssl curl)
 optdepends=('ffmpeg: video downloads use it to join video and sound (else Thurea fetches its own copy)'
             'jq: add Thurea to the Omarchy bar when the shell is not running'

@@ -46,6 +46,7 @@ inst 755 "$DATA/thurea-tray" usr/bin/thurea-tray
 inst 644 "$DATA/Thurea.apk"  usr/share/thurea/Thurea.apk
 inst 644 "$DATA/CREDITS.md"  usr/share/thurea/CREDITS.md
 inst 644 "$DATA/CREDITS.md"  usr/share/licenses/thurea/CREDITS.md
+inst 644 "$DATA/LICENSE"     usr/share/licenses/thurea/LICENSE
 for f in thurea.crx updates.xml hosts-block chromium-policy.json firefox-policies.json extension-id release-key.pub.pem VERSION; do
   inst 644 "$DATA/$f" "usr/share/thurea/$f"
 done
