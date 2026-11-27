@@ -43,6 +43,12 @@ Every option and the full family setup: [docs/install.md](docs/install.md).
 * One app on every desktop (Omarea on Omarchy, a tray elsewhere) with status, a verse of the day
   and phone setup.
 
+| Omarchy (Omarea) | Windows install |
+|---|---|
+| ![Omarea in the Omarchy bar, its panel open, and omarea doctor](docs/images/omarea-preview.png) | ![Install Thurea.cmd output and the Thurea window on Windows](docs/images/windows-install-preview.png) |
+
+*Rendered previews drawn from the code, not screenshots of real machines.*
+
 ## More
 
 | | |
