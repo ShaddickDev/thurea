@@ -2,6 +2,13 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## 1.0.5
+
+### Windows
+- Fixed: `thurea-windows.msix` from 1.0.4 failed to open with "Error in parsing the app package".
+  The signing certificate is now included in the MSIX signature, so Windows can open it (after
+  `Trust-Thurea.cmd` has been run once on the PC).
+
 ## 1.0.4
 
 ### Updates
