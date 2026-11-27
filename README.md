@@ -65,3 +65,8 @@ Every option and the full family setup: [docs/install.md](docs/install.md).
 | [Windows](docs/windows.md) | How it protects, games and anti-cheat, recovery |
 | [Releasing](docs/releasing.md) | Updates, push to release, building, repository layout |
 | [Credits](CREDITS.md) | Everything Thurea ships and its licences |
+
+## Licence
+
+Thurea is free and open source under the [MIT License](LICENSE). Copyright © 2026 Luke Shaddick (ShaddickDev).
+Third-party parts keep their own licences: see [Credits](CREDITS.md).

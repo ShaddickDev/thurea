@@ -43,11 +43,13 @@ for p in sys.argv[1:3]:
     json.dump(m, open(p, "w"), indent=2); open(p, "a").write("\n")
 PY
 cp "$R/CREDITS.md" "$C/CREDITS.md"
+cp "$R/LICENSE" "$C/LICENSE"
 cp "$R/extension/icons/thurea.svg" "$C/omarea.svg"
 
 # ---- Extension ----
 ( cd "$R/extension" && tar --exclude='host' --exclude='firefox' --exclude='README.md' --exclude='bump-sw.sh' -cf - . ) | tar -xf - -C "$B/ext"
 cp "$R/CREDITS.md" "$B/ext/CREDITS.md"
+cp "$R/LICENSE" "$B/ext/LICENSE"
 python3 - "$B/ext/manifest.json" "$VER" <<'PY'
 import json, sys
 p, v = sys.argv[1], sys.argv[2]
@@ -244,6 +246,7 @@ else
   echo "   (no mcs: ThureaTray.exe will be compiled on each PC, unsigned)"
 fi
 cp "$R/CREDITS.md" "$W/CREDITS.md"
+cp "$R/LICENSE" "$W/LICENSE"
 cp "$C/thurea.crx" "$C/updates.xml" "$W/web/"
 cp "$C/thurea.xpi" "$W/web/$XPI_NAME"
 cp "$D/thurea-android.apk" "$W/android/Thurea.apk"

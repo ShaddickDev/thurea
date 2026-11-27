@@ -1,7 +1,7 @@
 # Thurea: credits and third-party notices
 
-Thurea's own code is in this repository. It also uses, ships or downloads the work of others,
-listed below with their licenses. Everything Thurea **ships** is under a permissive or
+Thurea's own code is in this repository, © 2026 Luke Shaddick (ShaddickDev), under the [MIT License](LICENSE).
+It also uses, ships or downloads the work of others, listed below with their licenses. Everything Thurea **ships** is under a permissive or
 public-domain license, or (for filter data) an attribution license, and is credited here.
 Components under copyleft licenses are **downloaded at run time** from their authors'
 own releases and never bundled into Thurea.
