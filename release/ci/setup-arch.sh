@@ -8,7 +8,7 @@ pacman -Syu --noconfirm --needed git sudo rustup mingw-w64-gcc chromium dpkg rpm
 archlinux-java set java-17-openjdk
 
 # jsign (Authenticode for .exe and .ps1, as in docs/windows.md), checked against a pinned SHA-256.
-curl -fsSLo /usr/local/lib/jsign.jar https://repo1.maven.org/maven2/net/jsign/jsign/7.1/jsign-7.1.jar
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /usr/local/lib/jsign.jar https://repo1.maven.org/maven2/net/jsign/jsign/7.1/jsign-7.1.jar
 echo "cfb48b07fdd2ee199bfc9e71d8dccdde67a799c4793602e446c7a101be62b3c4  /usr/local/lib/jsign.jar" | sha256sum -c --quiet
 printf '#!/bin/sh\nexec java -jar /usr/local/lib/jsign.jar "$@"\n' > /usr/local/bin/jsign && chmod 755 /usr/local/bin/jsign
 
@@ -21,7 +21,7 @@ as 'rustup default stable >/dev/null && rustup target add x86_64-pc-windows-gnu 
 # Android command-line tools, then the platform, build tools and NDK android/build.sh uses.
 as 'set -e
 SDK=$HOME/Android/Sdk; mkdir -p "$SDK/cmdline-tools"
-curl -fsSLo /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
 unzip -q /tmp/clt.zip -d "$SDK/cmdline-tools" && mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 M="$SDK/cmdline-tools/latest/bin/sdkmanager --sdk_root=$SDK"
