@@ -1,10 +1,11 @@
-// Features merged from Omarchy's bundled Chromium extensions (Copy URL,
-// Download Video). Both hand off to Omarchy's native hosts, which own the
-// clipboard / yt-dlp work and the desktop notifications.
+// Copy URL and Download Video (ideas from Omarchy's bundled Chromium extensions), on every
+// desktop: the address is copied by the page itself (no helper needed), and videos go to
+// Thurea's own downloader (com.thurea.ytdlp, on Windows and every Linux), the same list as
+// the popup's downloads and Thurea's Downloads page.
 
-function omarchyCopyUrl(url) {
-  if (!url) return;
-  chrome.runtime.sendNativeMessage("com.thurea.omarchy_copy_url", { url }, () => void chrome.runtime.lastError);
+function omarchyCopyUrl(url, tabId) {
+  if (!url || tabId == null) return;
+  chrome.tabs.sendMessage(tabId, { type: "thureaCopy", text: url }, { frameId: 0 }, () => void chrome.runtime.lastError);
 }
 
 // Twitch: only past broadcasts (VODs), never live streams.
@@ -14,19 +15,19 @@ const TWITCH_VOD = /^https?:\/\/([a-z0-9-]+\.)*twitch\.tv\/(videos\/\d+|[\w-]+\/
 function omarchyDownload(url) {
   if (!url || !/^https?:/i.test(url)) return;
   if (TWITCH_HOST.test(url) && !TWITCH_VOD.test(url)) return;
-  chrome.runtime.sendNativeMessage("com.thurea.omarchy_ytdlp", { url }, () => void chrome.runtime.lastError);
+  chrome.runtime.sendNativeMessage("com.thurea.ytdlp", { type: "download", url, quality: "best", title: "", from: "browser" }, () => void chrome.runtime.lastError);
 }
 
 chrome.commands.onCommand.addListener(command => {
   if (command !== "copy-url" && command !== "download-video") return;
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-    const url = tabs[0] && tabs[0].url;
-    if (command === "copy-url") omarchyCopyUrl(url);
-    else omarchyDownload(url);
+    const t = tabs && tabs[0];
+    if (!t) return;
+    if (command === "copy-url") omarchyCopyUrl(t.url, t.id);
+    else omarchyDownload(t.url);
   });
 });
 
 chrome.runtime.onMessage.addListener(msg => {
-  if (msg && msg.type === "omarchy:copyUrl") omarchyCopyUrl(msg.url);
   if (msg && msg.type === "omarchy:download") omarchyDownload(msg.url);
 });

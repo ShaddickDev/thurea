@@ -20,7 +20,7 @@ chrome.storage.local.get({ popupTab: "thurea" }).then(r => showTab(r.popupTab));
     chrome.storage.local.get({ ytClassicLayout: true }).then(st => { yc.checked = st.ytClassicLayout; });
     yc.onchange = () => chrome.storage.local.set({ ytClassicLayout: yc.checked });
   }
-  document.getElementById("copyUrl").onclick = () => { chrome.runtime.sendMessage({ type: "omarchy:copyUrl", url: tab.url }); window.close(); };
+  document.getElementById("copyUrl").onclick = () => { navigator.clipboard.writeText(tab.url || "").catch(() => {}).finally(() => window.close()); };
   setupExtras(tab);
 
   // ── Ad-block controls ──
@@ -445,9 +445,17 @@ function twitchLabel(s) {
 function setupTwitch(tab, scripts, onTwitch) {
   document.getElementById("twGroup").hidden = false;
   const list = document.getElementById("twList");
-  if (!scripts.length) return;
   list.replaceChildren();
-  for (const s of scripts) {
+  // Built into Thurea (the manifest runs them on twitch.tv): always on, nothing to switch on.
+  for (const label of ["Block Twitch ads", "Auto-claim channel points"]) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.style.margin = "8px 0 0";
+    row.append(Object.assign(document.createElement("span"), { textContent: label }),
+      Object.assign(document.createElement("span"), { className: "note", textContent: "Built in, on" }));
+    list.append(row);
+  }
+  for (const s of scripts.filter(x => !isBuiltIn(x))) {
     const row = document.createElement("div");
     row.className = "row";
     row.style.margin = "8px 0 0";

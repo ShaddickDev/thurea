@@ -106,3 +106,14 @@ function userScriptUpdateUrls(s) {
   const download = s.meta.downloadURL || s.meta.updateURL || s.installedFrom;
   return download ? { check: s.meta.updateURL || download, download } : null;
 }
+
+// Twitch ad blocking (vaft) and channel points (AutoClaim) are built in: the manifest runs
+// them on twitch.tv as ordinary content scripts, so they work in every browser straight
+// after Thurea is installed, without "Allow User Scripts". Copies that earlier versions
+// added to the userscript list are switched off once, so the two don't both run.
+const BUILT_IN_SCRIPTS = [
+  { name: "TwitchAdSolutions (vaft)", namespace: "https://github.com/pixeltris/TwitchAdSolutions" },
+  { name: "AutoClaim Point Twitch | by MjKey", namespace: "https://greasyfork.org/users/519758" },
+  { name: "Twitch Auto Channel Points" }
+];
+const isBuiltIn = s => BUILT_IN_SCRIPTS.some(b => s.meta.name === b.name || (b.namespace && s.meta.namespace === b.namespace));
