@@ -5,6 +5,8 @@ Each release's section below is used as its GitHub release notes (`release/publi
 ## Unreleased
 
 ### Android
+- `thurea update-phone` (and `android/phone-setup.sh update`): updates Thurea on a phone over adb
+  and never signs any account out, whether Thurea is device owner, device admin, or was taken off.
 - Fixed: Chrome (and every other app) could lose the internet on networks that block DNS over TLS
   or intercept 1.1.1.x, because Private DNS was locked to family DNS regardless. Thurea now locks it
   only where family DNS answers, and Chrome's own secure DNS falls back where it can't reach it.

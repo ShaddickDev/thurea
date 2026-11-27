@@ -40,6 +40,9 @@ Set up (as root / Administrator):
                                    QR (Wireless debugging) or USB, installs Thurea, signs the accounts
                                    out for a moment, makes Thurea the device owner, signs them back in.
                                    No admin needed; needs adb (android-tools)
+  thurea update-phone [--apk PATH] [--tray]
+                                   Update Thurea on a phone over USB or Wireless debugging, keeping
+                                   every account signed in (device owner, device admin or neither)
   thurea pair-android [--name N] [--peers ADDR,...]
                                    Join the USB-connected Android phone that already has Thurea
   thurea add-peer ADDRESS          Also reach a device by address (e.g. a Tailscale IP)
@@ -205,7 +208,8 @@ fn dispatch(args: &[String]) -> Result<String, String> {
                 tray,
             })
         }
-        "adopt-phone" => adopt::run(flag(args, "--apk").map(Into::into), args.iter().any(|a| a == "--tray")),
+        "adopt-phone" => adopt::run(flag(args, "--apk").map(Into::into), args.iter().any(|a| a == "--tray"), false),
+        "update-phone" => adopt::run(flag(args, "--apk").map(Into::into), args.iter().any(|a| a == "--tray"), true),
         "install" => {
             need_admin()?;
             Config::load()?;

@@ -80,6 +80,7 @@ pub fn find_apk(given: Option<PathBuf>) -> Result<PathBuf, String> {
     let mut c = Vec::new();
     if let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
         c.push(d.join("Thurea.apk"));
+        c.push(d.join("android").join("Thurea.apk")); // Windows: Program Files\Thurea\android
         c.push(d.join("../share/thurea/Thurea.apk"));
     }
     #[cfg(unix)]
