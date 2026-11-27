@@ -2,6 +2,19 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## 1.0.4
+
+### Updates
+- Android 12 and later install Thurea's own updates silently, even without device owner. When
+  Android still wants a tap (Android 10/11), a "Thurea update ready" notification appears. Before,
+  those phones never updated.
+- Updating Thurea on Android never signs accounts out: `phone-setup.sh` on a phone where Thurea is
+  already device admin now updates in place and keeps every account (WhatsApp included).
+- The Linux tray restarts into the new version after an update.
+- The family control centre no longer reuses a window still running an older version.
+- Omarea installed with `omarchy plugin add` now follows Thurea's updates instead of staying on
+  the version it was cloned at.
+
 ## 1.0.3
 
 ### Browser extension (every platform)
