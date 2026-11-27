@@ -8,7 +8,8 @@
 #   thurea-extension.crx       the Thurea browser extension (also inside every desktop package)
 #   thurea-extension-firefox.xpi  the same for Firefox-family browsers (signed with AMO_JWT_*)
 #   thurea-linux.pkg.tar.zst   Thurea for Linux (Arch / Omarchy pacman package)
-#   thurea-windows.zip         Thurea for Windows (Thurea\Install Thurea.cmd)
+#   thurea-windows.zip         Thurea for Windows (Thurea\Install Thurea.cmd); Windows updates from it
+#   thurea-windows.msix        the same as an MSIX installer ("Thurea Setup"; built when mcs is there)
 #   thurea-android.apk         Thurea for Android
 #   thurea-manifest.json       version + SHA-256 of each file
 #   thurea-manifest.json.sig   RSA-SHA256 signature of the manifest with the release key
@@ -277,6 +278,44 @@ with zipfile.ZipFile("../../../dist/thurea-windows.zip", "w", zipfile.ZIP_DEFLAT
 PY
 )
 
+# MSIX installer ("Thurea Setup"): the same Thurea folder plus ThureaSetup.exe and Setup.ps1, which
+# hand the install to a SYSTEM task outside the package (windows/msix/Setup.ps1 says why).
+# Windows installs an MSIX only if it is signed by a certificate the PC trusts, and the manifest's
+# Publisher must be exactly that certificate's subject: THUREA_MSIX_PUBLISHER. Unsigned, it gets
+# Windows' "unsigned" publisher, which installs only with Add-AppxPackage -AllowUnsigned (testing).
+UNSIGNED_PUBLISHER='CN=Thurea, OID.2.25.311729368913984317654407730594956997722=1'
+if command -v mcs >/dev/null; then
+  M=$B/msix; mkdir -p "$M/Assets" "$M/Thurea/windows"
+  cp -r "$W/." "$M/Thurea/"
+  cp "$D/thurea-windows.zip" "$M/Thurea/windows/thurea-windows.zip"
+  sed "s/\r\?$/\r/" "$R/windows/msix/Setup.ps1" > "$M/Setup.ps1"
+  for a in StoreLogo Square150x150Logo Square44x44Logo; do cp "$R/extension/icons/icon128.png" "$M/Assets/$a.png"; done
+  mcs -nologo -target:winexe -optimize+ -out:"$M/ThureaSetup.exe" -r:System.Windows.Forms.dll "$R/windows/msix/ThureaSetup.cs" >> "$B/msix.log" 2>&1 \
+    || { cat "$B/msix.log"; echo "ThureaSetup.exe build failed"; exit 1; }
+  MSIX_PUBLISHER=${THUREA_MSIX_PUBLISHER:-}; MSIX_SIGN=false
+  if [ -n "${THUREA_SIGN_CMD:-}" ] && [ -n "$MSIX_PUBLISHER" ]; then MSIX_SIGN=true
+  elif [ "${THUREA_REQUIRE_SIGNED:-0}" = 1 ]; then
+    echo "THUREA_REQUIRE_SIGNED=1 but the MSIX can't be signed: set THUREA_SIGN_CMD and THUREA_MSIX_PUBLISHER (the certificate's subject)"; exit 1
+  else MSIX_PUBLISHER=$UNSIGNED_PUBLISHER
+  fi
+  python3 -c 'import sys; from xml.sax.saxutils import escape
+src, out, ver, pub = sys.argv[1:]
+t = open(src, encoding="utf-8").read()
+open(out, "w", encoding="utf-8").write(t.replace("@VERSION@", ver).replace("@PUBLISHER@", escape(pub, {"\"": "&quot;"})))' \
+    "$R/windows/msix/AppxManifest.xml" "$M/AppxManifest.xml" "$VER.0" "$MSIX_PUBLISHER"
+  sign() { bash -c "$THUREA_SIGN_CMD \"\$1\"" sign "$1" >> "$B/sign.log" 2>&1 || { cat "$B/sign.log"; echo "signing $1 failed"; exit 1; }; }
+  if $MSIX_SIGN; then sign "$M/ThureaSetup.exe"; sign "$M/Setup.ps1"; fi
+  python3 "$R/release/msix.py" "$M" "$D/thurea-windows.msix"
+  if $MSIX_SIGN; then
+    sign "$D/thurea-windows.msix"
+    echo "   msix: signed, publisher $MSIX_PUBLISHER"
+  else
+    echo "   WARNING: thurea-windows.msix is NOT signed, so Windows won't install it (set THUREA_SIGN_CMD and THUREA_MSIX_PUBLISHER)"
+  fi
+else
+  echo "   (no mcs: no thurea-windows.msix)"
+fi
+
 # ---- Manifest, signed ----
 python3 - "$D" "$VER" <<'PY'
 import hashlib, json, os, sys, time
@@ -285,7 +324,10 @@ files = {}
 for key, name in [("extension", "thurea-extension.crx"), ("extension-firefox", "thurea-extension-firefox.xpi"),
                   ("linux", "thurea-linux.pkg.tar.zst"),
                   ("linux-deb", "thurea-linux.deb"), ("linux-rpm", "thurea-linux.rpm"),
-                  ("windows", "thurea-windows.zip"), ("android", "thurea-android.apk")]:
+                  ("windows", "thurea-windows.zip"), ("windows-msix", "thurea-windows.msix"),
+                  ("android", "thurea-android.apk")]:
+    if key == "windows-msix" and not os.path.exists(os.path.join(d, name)):
+        continue
     data = open(os.path.join(d, name), "rb").read()
     files[key] = {"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 json.dump({"name": "Thurea", "version": v, "released": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "files": files},
