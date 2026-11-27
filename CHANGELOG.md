@@ -4,6 +4,13 @@ Each release's section below is used as its GitHub release notes (`release/publi
 
 ## Unreleased
 
+### Android
+- Fixed: Chrome (and every other app) could lose the internet on networks that block DNS over TLS
+  or intercept 1.1.1.x, because Private DNS was locked to family DNS regardless. Thurea now locks it
+  only where family DNS answers, and Chrome's own secure DNS falls back where it can't reach it.
+- Chrome on children's phones now uses CleanBrowsing's documented DNS-over-HTTPS address
+  (`doh.cleanbrowsing.org/doh/family-filter/`) instead of its DNS-over-TLS host name.
+
 ### Windows
 - Fixed: on some networks, switching to family DNS left the PC with no internet at all. Thurea
   now checks that Cloudflare for Families can be reached and that names still resolve before it
