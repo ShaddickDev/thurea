@@ -9,6 +9,8 @@ REPO=${THUREA_REPO:-ShaddickDev/thurea}
 openssl dgst -sha256 -verify "$R/release/release-key.pub.pem" -signature "$D/thurea-manifest.json.sig" "$D/thurea-manifest.json" >/dev/null
 ASSETS=(thurea-extension.crx thurea-extension-firefox.xpi thurea-linux.pkg.tar.zst thurea-linux.deb thurea-linux.rpm thurea-windows.zip thurea-android.apk)
 [ -f "$D/thurea-windows.msix" ] && ASSETS+=(thurea-windows.msix)
+# Not in the signed manifest (nothing updates from it): trusts a self-signed signing certificate.
+EXTRA=(); [ -f "$D/Trust-Thurea.cmd" ] && EXTRA+=("$D/Trust-Thurea.cmd")
 VER=$(python3 - "$D" "${ASSETS[@]}" <<'PY'
 import hashlib, json, sys
 d = sys.argv[1]; m = json.load(open(f"{d}/thurea-manifest.json"))
@@ -34,4 +36,4 @@ TARGET=(); [ -n "${THUREA_TARGET:-}" ] && TARGET=(--target "$THUREA_TARGET")
 gh release create "v$VER" --repo "$REPO" --title "Thurea $VER" --latest "${TARGET[@]}" \
   --notes "$NOTES" \
   "${ASSETS[@]}" \
-  "$D"/thurea-manifest.json "$D"/thurea-manifest.json.sig
+  "$D"/thurea-manifest.json "$D"/thurea-manifest.json.sig "${EXTRA[@]}"
