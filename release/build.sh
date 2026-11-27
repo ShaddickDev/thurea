@@ -308,6 +308,12 @@ open(out, "w", encoding="utf-8").write(t.replace("@VERSION@", ver).replace("@PUB
   python3 "$R/release/msix.py" "$M" "$D/thurea-windows.msix"
   if $MSIX_SIGN; then
     sign "$D/thurea-windows.msix"
+    # jsign leaves a self-signed certificate out of the signature, and Windows then can't open the
+    # package ("Error in parsing the app package"): put it in, then check the signature holds one.
+    [ -n "${THUREA_SIGN_CERT:-}" ] && python3 -I "$R/release/msix-addcert.py" "$D/thurea-windows.msix" "$THUREA_SIGN_CERT"
+    python3 -I -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read("AppxSignature.p7x")[4:])' "$D/thurea-windows.msix" \
+      | openssl pkcs7 -inform DER -print_certs -noout 2>/dev/null | grep -q '^subject=' \
+      || { echo "thurea-windows.msix: the signature has no certificate, so Windows can't open it"; exit 1; }
     echo "   msix: signed, publisher $MSIX_PUBLISHER"
     # A self-signed certificate (THUREA_SIGN_CERT, its public half) is trusted only where an
     # Administrator has imported it: Trust-Thurea.cmd does that in one click, once per PC.
