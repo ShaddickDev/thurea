@@ -26,8 +26,9 @@ const PAGE: &str = include_str!("control.html");
 /// Closes itself after this long without the page asking for anything (the open page asks
 /// every few seconds, so this is "30 minutes after the window was closed").
 const IDLE: Duration = Duration::from_secs(30 * 60);
-/// What `/api/ping` answers, so a launcher knows the port is still ours.
-const PING: &str = "thurea-control-center";
+/// What `/api/ping` answers, so a launcher knows the port is still ours, and this version's: a
+/// control center started before Thurea updated itself isn't reused (it closes when idle).
+const PING: &str = concat!("thurea-control-center ", env!("CARGO_PKG_VERSION"), "\n");
 
 fn session_file() -> PathBuf {
     #[cfg(windows)]

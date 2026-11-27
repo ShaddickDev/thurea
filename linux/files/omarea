@@ -336,9 +336,15 @@ link_plugin() {
   [ -f "$SRC/manifest.json" ] || return 1
   mkdir -p "$OMA/plugins"
   local link=$OMA/plugins/$ID old=$OMA/plugins/$OLD_ID
-  # Added with `omarchy plugin add` (a git checkout)? That's the user's choice: leave it.
+  # Added with `omarchy plugin add` (a git checkout)? A checkout of Thurea's own repository stays
+  # at the commit it was cloned at, while the package's copy updates itself from signed releases:
+  # move the checkout aside (to Omarea's state folder, where Omarchy doesn't look) and link the
+  # package's copy, so the widget updates with Thurea. Any other folder there is yours: left alone.
   if [ -d "$link" ] && [ ! -L "$link" ]; then
-    :
+    if grep -qi 'github\.com[:/]ShaddickDev/thurea' "$link/.git/config" 2>/dev/null; then
+      mkdir -p "$STATE_DIR" && rm -rf "$STATE_DIR/git-checkout" &&
+        mv "$link" "$STATE_DIR/git-checkout" && ln -s "$SRC" "$link"
+    fi
   elif [ "$(readlink "$link" 2>/dev/null)" != "$SRC" ]; then
     rm -f "$link"; ln -s "$SRC" "$link"
   fi

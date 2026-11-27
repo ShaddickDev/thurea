@@ -12,6 +12,8 @@
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
   <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES"/>
   <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP"/>
+  <!-- Self-update without a prompt on Android 12+ even when Thurea isn't device owner (Updater). -->
+  <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
   <!-- Daily check for newer Morphe patches (GitHub only). -->
   <uses-permission android:name="android.permission.INTERNET"/>
   <!-- Household mesh: a foreground service so Android doesn't stop the heartbeats. -->

@@ -11,6 +11,20 @@ the "Thurea Update" task; Linux: `thurea-update.timer`; Android: Thurea's backgr
 2. the downloaded file matches the SHA-256 in that signed manifest, and
 3. it is newer than what's installed. (Android additionally requires the same APK signing key.)
 
+What each app gets, with no reinstall:
+
+| App | How it updates |
+|---|---|
+| Windows (zip or MSIX) | the "Thurea Update" task installs the signed `thurea-windows.zip` into Program Files\Thurea; an MSIX install hands over to the same copy, so it updates the same way |
+| Linux: Arch / Omarchy, Debian / Ubuntu, Fedora | `thurea-update.timer` installs the signed package with pacman, apt or dnf |
+| Omarea (Omarchy) | ships in the Linux package; a `omarchy plugin add` checkout of this repository is swapped for the package's copy once Thurea is installed, so it updates with it |
+| Linux tray (`thurea-tray`) | restarts itself into the new version once the package is updated |
+| Windows tray | stopped and restarted by the update |
+| Family control centre | part of `thurea`; a control centre still open from an older version isn't reused (it closes when idle) |
+| Browser extension, Chromium family | force-installed from this computer's update server (`127.0.0.1:8137/updates.xml`), which the desktop update refreshes |
+| Browser extension, Firefox family | force-installed by policy from a versioned `install_url`, so Firefox reinstalls it after each desktop update. Firefox and Zen only accept it once it is signed by Mozilla (`AMO_JWT_*` secrets); until then only builds that allow unsigned add-ons take it |
+| Android | Thurea's background job. As device owner it installs silently; otherwise Android 12+ installs silently too (Thurea updating itself), and older Android or a phone that still asks gets a "Thurea update ready" notification to tap |
+
 ## Release from GitHub (any computer)
 
 `.github/workflows/release.yml` builds every package on GitHub, signs them and publishes the

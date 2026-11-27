@@ -13,7 +13,16 @@ public class PinReceiver extends BroadcastReceiver {
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             // Shouldn't happen for the device owner; if Android insists, let you confirm.
             @SuppressWarnings("deprecation") Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
-            if (confirm != null) c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            if (confirm == null) return;
+            confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if ("self".equals(op)) {
+                // Thurea's own update on a phone where it isn't device owner (or Android before 12):
+                // Android needs a tap, and a background job can't open the prompt itself, so it waits
+                // in a notification. The APK already passed the signed-manifest and checksum checks.
+                Updater.askToInstall(c, confirm);
+                return;
+            }
+            c.startActivity(confirm);
             return;
         }
         boolean ok = status == PackageInstaller.STATUS_SUCCESS;
