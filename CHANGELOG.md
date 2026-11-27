@@ -2,7 +2,7 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
-## Unreleased
+## 1.0.6
 
 ### Android
 - `thurea update-phone` (and `android/phone-setup.sh update`): updates Thurea on a phone over adb
@@ -14,6 +14,9 @@ Each release's section below is used as its GitHub release notes (`release/publi
   (`doh.cleanbrowsing.org/doh/family-filter/`) instead of its DNS-over-TLS host name.
 
 ### Windows
+- **Install-Thurea.cmd**: one file that trusts Thurea's certificate and installs the MSIX.
+  Double-click it and approve one Administrator prompt.
+- Thurea's shield icon on the tray app, Thurea Setup, the Start menu and the MSIX tiles.
 - Fixed: Thurea could break the PC's internet (some sites such as YouTube and Twitch first, then
   everything) by switching DNS to Cloudflare for Families. Thurea for Windows now never changes
   DNS: no adapter DNS servers, no Windows DNS over HTTPS, no browser secure-DNS policy and no
