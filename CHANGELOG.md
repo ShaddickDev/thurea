@@ -2,7 +2,7 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
-## Unreleased
+## 1.0.3
 
 ### Browser extension (every platform)
 - Twitch ad blocking (vaft) and channel-point auto-claim are built in: they run on twitch.tv as
