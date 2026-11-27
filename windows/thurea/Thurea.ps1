@@ -203,6 +203,40 @@ function Set-Hosts {
 }
 
 # ---------- DNS ----------
+# Can this network reach the family resolvers? Plain DNS (port 53) to 1.1.1.3 / 1.0.0.3, or, for
+# networks that block port 53 to outside resolvers, HTTPS (port 443) to them, which Windows' DNS
+# over HTTPS uses. Some networks reach neither (a router or ISP that intercepts 1.1.1.x, captive
+# Wi-Fi, some security suites): forcing the family DNS there leaves the PC with no internet at all.
+function Test-FamilyReachable {
+    foreach ($ip in $FamilyV4) {
+        try {
+            if (Resolve-DnsName -Name 'www.msftconnecttest.com' -Server $ip -DnsOnly -NoHostsFile -QuickTimeout -Type A -ErrorAction Stop) { return $true }
+        } catch {}
+    }
+    foreach ($ip in $FamilyV4) {
+        $tcp = New-Object Net.Sockets.TcpClient
+        try { if ($tcp.ConnectAsync($ip, 443).Wait(3000) -and $tcp.Connected) { return $true } } catch {} finally { $tcp.Dispose() }
+    }
+    return $false
+}
+# Does this PC resolve names at all right now (through whatever DNS its adapters use)?
+function Test-SystemDns {
+    foreach ($n in @('www.msftconnecttest.com', 'www.google.com')) {
+        try { if (Resolve-DnsName -Name $n -DnsOnly -NoHostsFile -QuickTimeout -Type A -ErrorAction Stop) { return $true } } catch {}
+    }
+    return $false
+}
+# Asked once per run. After the family DNS was tried and nothing resolved, it isn't tried again for
+# 30 minutes (so the PC doesn't drop off the internet for a moment at every 5-minute apply).
+$script:FamilyOk = $null
+function Get-FamilyOk {
+    if ($null -eq $script:FamilyOk) {
+        $failed = Get-Item (Join-Path $State 'family-dns.failed') -ErrorAction SilentlyContinue
+        $script:FamilyOk = if ($failed -and $failed.LastWriteTime -gt (Get-Date).AddMinutes(-30)) { $false } else { Test-FamilyReachable }
+    }
+    return $script:FamilyOk
+}
+
 function Set-FamilyDns {
     foreach ($ip in $FamilyV4 + $FamilyV6) {
         $doh = Get-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue
@@ -214,13 +248,39 @@ function Set-FamilyDns {
     }
     # Use DoH for resolvers that support it (Allow + auto-upgrade); plain DNS to 1.1.1.3 is filtered too.
     [void](Set-Reg 'SOFTWARE\Policies\Microsoft\Windows NT\DNSClient' 'DoHPolicy' 2 'DWord')
-    $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' -and $_.InterfaceDescription -notmatch 'Loopback' }
+    $adapters = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' -and $_.InterfaceDescription -notmatch 'Loopback' })
+    if (-not (Get-FamilyOk)) {
+        # Never cut the PC off: leave (or put back) the network's own DNS until the family resolvers
+        # answer again. Apply checks every 5 minutes and on every network change. The status shows
+        # DNS as not protected meanwhile; the extension, SafeSearch and the blocked browsers stay.
+        foreach ($a in $adapters) {
+            $v4 = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses
+            if ((@($v4) -join ',') -eq ($FamilyV4 -join ',')) {
+                Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses
+                Log "DNS: $($a.Name) back to the network's own DNS (Cloudflare for Families can't be reached from this network)"
+            }
+        }
+        return
+    }
+    $changed = @()
     foreach ($a in $adapters) {
         $v4 = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses
         $v6 = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv6 -ErrorAction SilentlyContinue).ServerAddresses
         if ((@($v4) -join ',') -ne ($FamilyV4 -join ',') -or (@($v6) -join ',') -ne ($FamilyV6 -join ',')) {
             Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ($FamilyV4 + $FamilyV6)
             Log "DNS: $($a.Name) set to Cloudflare for Families"
+            $changed += $a
+        }
+    }
+    # Names must still resolve afterwards; if they don't, put the network's DNS back at once.
+    if ($changed.Count) { Clear-DnsClientCache -ErrorAction SilentlyContinue }
+    if ($changed.Count -and -not (Test-SystemDns)) {
+        Start-Sleep -Seconds 2
+        if (-not (Test-SystemDns)) {
+            foreach ($a in $changed) { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses }
+            $script:FamilyOk = $false
+            [IO.File]::WriteAllText((Join-Path $State 'family-dns.failed'), (Get-Date).ToString('o'))
+            Log 'DNS: nothing resolved with Cloudflare for Families: the network''s own DNS is back'
         }
     }
 }
@@ -239,8 +299,14 @@ function Set-FirewallRule([string]$name, [hashtable]$p) {
 function Set-Firewall {
     if ((Get-NetFirewallProfile | Where-Object { -not $_.Enabled })) { Set-NetFirewallProfile -All -Enabled True; Log 'firewall: turned back on' }
     Set-FirewallRule 'Thurea - public DNS-over-HTTPS servers' @{ RemoteAddress = $DohBlock }
-    Set-FirewallRule 'Thurea - other DNS servers (UDP)' @{ Protocol = 'UDP'; RemotePort = @('53', '853'); RemoteAddress = $NotFamily }
-    Set-FirewallRule 'Thurea - other DNS servers (TCP)' @{ Protocol = 'TCP'; RemotePort = @('53', '853'); RemoteAddress = $NotFamily }
+    if (Get-FamilyOk) {
+        Set-FirewallRule 'Thurea - other DNS servers (UDP)' @{ Protocol = 'UDP'; RemotePort = @('53', '853'); RemoteAddress = $NotFamily }
+        Set-FirewallRule 'Thurea - other DNS servers (TCP)' @{ Protocol = 'TCP'; RemotePort = @('53', '853'); RemoteAddress = $NotFamily }
+    } else {
+        # The family resolvers can't be reached: the network's own DNS must be allowed meanwhile.
+        $r = @(Get-NetFirewallRule -DisplayName 'Thurea - other DNS servers (*' -ErrorAction SilentlyContinue)
+        if ($r.Count) { $r | Remove-NetFirewallRule; Log 'firewall: DNS lock lifted while Cloudflare for Families can''t be reached' }
+    }
 }
 
 # ---------- browsers ----------
@@ -262,7 +328,9 @@ function Set-ChromiumPolicy([string]$key) {
     $c = (Set-Reg $key 'ExtensionSettings' ($settings | ConvertTo-Json -Compress -Depth 4) 'String') -or $c
     $c = (Set-Reg "$key\3rdparty\extensions\$ExtId\policy" 'pornBlock' 1 'DWord') -or $c
     $c = (Set-Reg $key 'ForceGoogleSafeSearch' 1 'DWord') -or $c
-    $c = (Set-Reg $key 'DnsOverHttpsMode' 'secure' 'String') -or $c
+    # "secure" has no fallback: on a network that can't reach the family resolvers it would leave
+    # the browser with no internet, so it is "automatic" there until they answer again.
+    $c = (Set-Reg $key 'DnsOverHttpsMode' $(if (Get-FamilyOk) { 'secure' } else { 'automatic' }) 'String') -or $c
     $c = (Set-Reg $key 'DnsOverHttpsTemplates' $FamilyDoh 'String') -or $c
     $c = (Set-Reg $key 'IncognitoModeAvailability' 1 'DWord') -or $c
     $c = (Set-Reg $key 'InPrivateModeAvailability' 1 'DWord') -or $c
@@ -332,6 +400,8 @@ function Set-Browsers {
     # Firefox family: policies.json beside every installed copy (a registry policy would make Firefox
     # ignore policies.json, and the 37,000-site filter is too big for the registry).
     $ff = Get-Content -LiteralPath (Join-Path $Data 'firefox-policies.json') -Raw
+    # Same for Firefox: DNS over HTTPS may fall back while the family resolvers can't be reached.
+    if (-not (Get-FamilyOk)) { $ff = $ff -replace '"Fallback":\s*false', '"Fallback": true' }
     $dirs = New-Object System.Collections.Generic.HashSet[string]([StringComparer]::OrdinalIgnoreCase)
     foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}) + @(Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName 'AppData\Local' })) {
         if (-not $root -or -not (Test-Path $root)) { continue }

@@ -2,6 +2,14 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## Unreleased
+
+### Windows
+- Fixed: on some networks, switching to family DNS left the PC with no internet at all. Thurea
+  now checks that Cloudflare for Families can be reached and that names still resolve before it
+  locks DNS. Where they can't, the network's own DNS stays (status shows DNS as not protected) and
+  Thurea tries again later.
+
 ## 1.0.5
 
 ### Windows

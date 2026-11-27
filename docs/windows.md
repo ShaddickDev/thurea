@@ -50,6 +50,12 @@ tooling. Thurea stays clear of all of it:
   family ones, and all traffic to a fixed list of public DNS-over-HTTPS servers. Game, voice and
   matchmaking traffic is never touched. Riot's and Epic's own name lookups go through family DNS
   like everything else, and Cloudflare for Families doesn't block them.
+* **Never cuts the PC off the internet:** before it switches an adapter to family DNS, Thurea
+  checks that this network reaches Cloudflare for Families (port 53, or 443 for DNS over HTTPS),
+  and afterwards that names still resolve. Where they don't (a router or ISP that intercepts
+  1.1.1.x, captive Wi-Fi, a security suite), the network's own DNS stays, the DNS firewall lock is
+  lifted, browsers' DNS over HTTPS may fall back, and `status` shows `dns MISSING`. It tries again
+  every 5 minutes (30 minutes after a failed switch) and on every network change.
 
 ### Windows security features
 
