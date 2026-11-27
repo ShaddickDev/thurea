@@ -8,3 +8,21 @@ One project, one version, one release, on every platform:
 | **Linux** (Arch / Omarchy, Debian / Ubuntu, Fedora) | The same, plus a hosts block of 64,000+ domains, nftables DNS lockdown, and a package that can't be removed (pacman hook / apt `Protected` / dnf protected packages). **Omarchy first:** [Omarea](omarea.md), Thurea made for Omarchy, fits itself in: bar widget, notifications, Omarchy menu, keybindings, the theme's colours (status, verse of the day, family, phone setup by QR); other desktops get `thurea-tray` | `thurea-linux.pkg.tar.zst` · `thurea-linux.deb` · `thurea-linux.rpm` |
 | **Android** | Device owner: family DNS, private DNS/VPN checks, locked apps, YouTube ad blocker, household mesh; set up with one QR scan (`thurea setup-phone`) | `thurea-android.apk` |
 | **Browser extension** | Ads, trackers, pop-unders, cookie banners, YouTube ads and SponsorBlock, video downloads at every resolution (through Thurea's downloader, shared with its Downloads page); adult sites blocked when the `pornBlock` policy is set (the desktop platforms set it). Force-installed in every Chromium browser (Chrome, Edge, Brave, Vivaldi…) and every Firefox-family one (Firefox, LibreWolf, Waterfox, Zen, Floorp), snap and Flatpak copies included | inside every desktop package; `thurea-extension.crx`, `thurea-extension-firefox.xpi` |
+
+## The same features everywhere
+
+Everything the browser extension does is the same on Windows and every Linux (Omarea included),
+because it is one extension, force-installed by policy when Thurea is set up:
+
+| Feature | Windows | Linux / Omarea | Android |
+|---|---|---|---|
+| Word-based blocking (porn searches, NSFW titles on YouTube, Reddit and X, adult addresses) | extension | extension | no (family DNS instead) |
+| YouTube ad blocking and SponsorBlock | extension | extension | Thurea helper |
+| Video downloads, every resolution (`com.thurea.ytdlp` → `thurea video-host`) | yes | yes | no (no browser extensions) |
+| Twitch ad blocking and channel-point auto-claim | built in | built in | patched Twitch app |
+| Copy URL / Download Video shortcuts | yes | yes | no |
+
+**Firefox family:** Firefox and Zen install only add-ons signed by Mozilla. A release built without
+`AMO_JWT_ISSUER` / `AMO_JWT_SECRET` ships an unsigned `thurea-extension-firefox.xpi`, which those
+two refuse (LibreWolf, Waterfox, Floorp, ESR and Developer Edition take it). Set both secrets so the
+release signs it.

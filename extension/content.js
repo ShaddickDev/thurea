@@ -549,6 +549,16 @@
   if (window === top) {
     chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       if (msg.type === "thureaState") reply({ adult: strict(), override: adultOverride ?? null });
+      // Copy URL (Alt+Shift+L): the page writes the address to the clipboard.
+      if (msg.type === "thureaCopy" && typeof msg.text === "string") {
+        navigator.clipboard.writeText(msg.text).catch(() => {
+          const t = document.createElement("textarea");
+          t.value = msg.text; t.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+          document.documentElement.appendChild(t); t.select();
+          try { document.execCommand("copy"); } catch {}
+          t.remove();
+        });
+      }
     });
   }
 })();

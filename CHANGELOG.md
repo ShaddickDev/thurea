@@ -2,6 +2,15 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## Unreleased
+
+### Browser extension (every platform)
+- Twitch ad blocking (vaft) and channel-point auto-claim are built in: they run on twitch.tv as
+  soon as the extension is installed, in every Chromium and Firefox-family browser, with no
+  "Allow User Scripts" switch to turn on. Copies in the userscript list are switched off once.
+- Copy URL (Alt+Shift+L) and Download Video (Alt+Shift+D) work on Windows and every Linux, not
+  only on Omarchy: the page copies the address itself, and videos go to Thurea's own downloader.
+
 ## 1.0.2
 
 ### Windows

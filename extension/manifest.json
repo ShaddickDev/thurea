@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Thurea – Ad Blocker & Video Downloader",
   "version": "2.4.7",
-  "description": "Blocks ads and trackers (including YouTube), pop-unders, redirects, click-hijacks and cookie banners; downloads videos; skips YouTube sponsors; runs userscripts. Includes Omarchy's Copy URL, Download Video and WhatsApp Slim.",
+  "description": "Blocks ads and trackers (including YouTube and Twitch), pop-unders, redirects, click-hijacks and cookie banners; downloads videos; skips YouTube sponsors; collects Twitch channel points; runs userscripts. Includes Copy URL, Download Video and WhatsApp Slim.",
   "permissions": [
     "declarativeNetRequest",
     "storage",
@@ -39,6 +39,28 @@
     ]
   },
   "content_scripts": [
+    {
+      "matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*"
+      ],
+      "js": [
+        "userscripts/vaft.user.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://twitch.tv/*",
+        "*://*.twitch.tv/*"
+      ],
+      "js": [
+        "userscripts/autoclaim-point-twitch.user.js"
+      ],
+      "run_at": "document_idle"
+    },
     {
       "matches": [
         "<all_urls>"
@@ -391,7 +413,7 @@
       "suggested_key": {
         "default": "Alt+Shift+D"
       },
-      "description": "Download Video (yt-dlp)"
+      "description": "Download Video (Thurea's downloader)"
     },
     "panic": {
       "suggested_key": {

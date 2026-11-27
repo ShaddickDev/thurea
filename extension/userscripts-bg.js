@@ -8,12 +8,8 @@ const RUN_AT = { "document-start": "document_start", "document-body": "document_
 // Scripts that ship with Thurea. Each is added once; new ones added in later
 // versions get added to existing installs too. `replaces` switches off an
 // older script that does the same job, so the two don't both run.
-const BUNDLED_SCRIPTS = [
-  { path: "userscripts/vaft.user.js",
-    source: "https://github.com/pixeltris/TwitchAdSolutions/raw/master/vaft/vaft.user.js" },
-  { path: "userscripts/autoclaim-point-twitch.user.js",
-    replaces: "Twitch Auto Channel Points" }
-];
+const BUNDLED_SCRIPTS = [];
+// Twitch's built-in scripts: BUILT_IN_SCRIPTS / isBuiltIn in userscripts-lib.js.
 
 // Firefox (moz-extension://) instead of Chromium. Also used by vpnguard.js.
 const IS_FIREFOX = chrome.runtime.getURL("").startsWith("moz-extension:");
@@ -159,6 +155,11 @@ async function seedBundledScripts() {
       userscriptsSeededPaths.push(b.path);
       changed = true;
     } catch (e) { console.warn("[Thurea] couldn't add bundled script", b.path, e); }
+  }
+  const { twitchBuiltIn } = await chrome.storage.local.get("twitchBuiltIn");
+  if (!twitchBuiltIn) {
+    userscripts.forEach(x => { if (isBuiltIn(x) && x.enabled) { x.enabled = false; changed = true; } });
+    await chrome.storage.local.set({ twitchBuiltIn: true });
   }
   if (changed || !userscriptsSeeded) {
     await chrome.storage.local.set({ userscripts, userscriptsSeeded: true, userscriptsSeededPaths });
