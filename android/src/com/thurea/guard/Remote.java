@@ -40,6 +40,15 @@ public class Remote extends Activity {
             new Thread(() -> Updater.check(app, true)).start();
             note = "Checking GitHub for a newer Thurea: see Settings → Updates";
         }
+        // `adb push twitch.apkm /sdcard/Android/data/com.thurea.guard/files/pins/` then
+        // `adb shell am start -n com.thurea.guard/.Remote --es patch_twitch twitch.apkm`: patch that
+        // Twitch bundle on the phone with ReVanced's patches and pin it (Patcher; same checks as ever).
+        String bundle = i.getStringExtra("patch_twitch");
+        if (bundle != null) {
+            java.io.File f = new java.io.File(Pins.dir(this), new java.io.File(bundle).getName());
+            if (f.exists()) { Patcher.patchTwitch(this, f); note = "Patching Twitch on the phone: see Pinned apps"; }
+            else note = "! No " + f.getName() + " in Thurea's pins folder";
+        }
         String mode = i.getStringExtra("account_mode");
         if (mode != null) AccountHelper.start(this, mode, i.getStringExtra("email"));
         // The account helper opens Settings itself; otherwise show Thurea's screen.

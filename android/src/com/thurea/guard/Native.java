@@ -73,6 +73,19 @@ final class Native {
      * under assetPrefix when one is given; {} if it isn't a release with a plain version number.
      */
     static native String latestRelease(String body, String assetPrefix);
+    // ── Patching on the phone (Rust: twitch.rs) ──
+    /** ReVanced's /v5/patches answer: {"tag", "rvp", "asc"}, or {} if it isn't from ReVanced's API. */
+    static native String patchesRelease(String body);
+    /** ReVanced's /v5/manager answer: {"tag", "apk", "asc"}, or {} if it isn't Manager's own release file. */
+    static native String managerRelease(String body);
+    /** "" if file is signed by ReVanced (sig: the detached signature file; keys: the /v5/patches/keys answer, or ""), else why not. */
+    static native String revancedSigned(String file, String sig, String keys);
+    /** Is an APK with these signing certificates (JSON array of SHA-256 hex) Twitch's own? */
+    static native boolean genuineTwitch(String certsJson);
+    /** Is an APK with these signing certificates ReVanced Manager's own? */
+    static native boolean genuineManager(String certsJson);
+    /** {"action": "current"|"error", "note"} or {"action": "patch", "patches", "twitch", "fresh"}. */
+    static native String twitchPlan(String haveJson, String patchesTag, String compatibleJson);
     /** Is version a newer than b? Number by number ("1.0.10" is newer than "1.0.9"). */
     static native boolean newerVersion(String a, String b);
     /** For this phone's plan (androidPlan's JSON): {"host", "doh_host"}, its family DNS and DoH server. */

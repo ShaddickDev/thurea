@@ -1092,3 +1092,45 @@ mod tests {
         assert_eq!(ahead["ref"], thurea_core::verses::for_day(day + 1).reference);
     }
 }
+
+// ── Patching on the phone (twitch.rs) ──
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_patchesRelease<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, body: JString<'l>) -> jstring {
+    let b = jstr(&mut env, &body);
+    let r = twitch::patches_release(&b).to_string();
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_managerRelease<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, body: JString<'l>) -> jstring {
+    let b = jstr(&mut env, &body);
+    let r = twitch::manager_release(&b).to_string();
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_revancedSigned<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, file: JString<'l>, sig: JString<'l>, keys: JString<'l>) -> jstring {
+    let (f, s, k) = (jstr(&mut env, &file), jstr(&mut env, &sig), jstr(&mut env, &keys));
+    let r = twitch::verify_revanced(&f, &s, &k).err().unwrap_or_default();
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_genuineTwitch<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, certs: JString<'l>) -> jboolean {
+    let c = jstr(&mut env, &certs);
+    jbool(twitch::genuine_twitch(&c))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_genuineManager<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, certs: JString<'l>) -> jboolean {
+    let c = jstr(&mut env, &certs);
+    jbool(twitch::genuine_manager(&c))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_twitchPlan<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, have: JString<'l>, tag: JString<'l>, compatible: JString<'l>) -> jstring {
+    let (h, t, c) = (jstr(&mut env, &have), jstr(&mut env, &tag), jstr(&mut env, &compatible));
+    let r = twitch::plan(&h, &t, &c).to_string();
+    out(&mut env, r)
+}

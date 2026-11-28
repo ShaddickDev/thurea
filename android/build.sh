@@ -25,12 +25,14 @@ for pair in aarch64-linux-android:arm64-v8a armv7-linux-androideabi:armeabi-v7a 
   cp "$ROOT/target/${pair%%:*}/release/libthurea_android.so" "$B/apk/lib/${pair#*:}/"
 done
 
-# 2. Java layer.
+# 2. Java layer, with ARSCLib (merges split APKs) and aapt2 for the patcher (android/deps.sh).
+DEPS=$("$A/deps.sh")
+for abi in arm64-v8a armeabi-v7a x86_64; do cp "$DEPS/aapt2/$abi/libaapt2.so" "$B/apk/lib/$abi/"; done
 "$BT/aapt2" compile --dir "$A/res" -o "$B/res/res.zip"
 "$BT/aapt2" link -o "$B/unsigned.apk" -I "$JAR" --min-sdk-version 29 --target-sdk-version 35 --manifest "$A/AndroidManifest.xml" --java "$B/gen" "$B/res/res.zip"
-javac -source 17 -target 17 -Xlint:-options -classpath "$JAR" -d "$B/classes" $(find "$A/src" "$B/gen" -name '*.java')
-"$BT/d8" --release --min-api 29 --lib "$JAR" --output "$B/dex" $(find "$B/classes" -name '*.class')
-(cd "$B/dex" && zip -qj "$B/unsigned.apk" classes.dex)
+javac -source 17 -target 17 -Xlint:-options -classpath "$JAR:$DEPS/arsclib.jar" -d "$B/classes" $(find "$A/src" "$B/gen" -name '*.java')
+"$BT/d8" --release --min-api 29 --lib "$JAR" --output "$B/dex" $(find "$B/classes" -name '*.class') "$DEPS/arsclib.jar"
+(cd "$B/dex" && zip -qj "$B/unsigned.apk" classes*.dex)
 (cd "$B/apk" && zip -qr0 "$B/unsigned.apk" lib)
 "$BT/zipalign" -f -P 16 4 "$B/unsigned.apk" "$B/aligned.apk"
 
