@@ -193,6 +193,17 @@ mod tests {
     }
 
     #[test]
+    fn real_revanced_signature() {
+        // ReVanced's signature on patches 6.2.1 (binary, from api.revanced.app/v5/patches.rvp.asc).
+        let sig: &[u8] = include_bytes!("../keys/test/revanced-6.2.1.rvp.asc");
+        let (d, _) = DetachedSignature::from_reader_single(sig).expect("a signature");
+        let issuer = d.signature.issuer_fingerprint().into_iter().map(|f| format!("{f:X}")).collect::<Vec<_>>();
+        assert_eq!(issuer, ["61C079D8CD06B2B14B4A462F1EDEE52215B296C4"]);
+        // Not a signature over anything else.
+        assert!(verify_with(&current_key(""), TEST_DATA, sig).is_err());
+    }
+
+    #[test]
     fn patches_releases() {
         let good = json!({"version": "v6.2.1", "created_at": "2026-06-02T18:30:00",
             "download_url": "https://api.revanced.app/v5/patches.rvp",
