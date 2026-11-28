@@ -480,10 +480,13 @@ function Invoke-Update {
     } catch { Log "update: couldn't reach the release ($($_.Exception.Message)); trying again later"; return }
     if (-not (Test-ReleaseSignature $man $sig)) { Log "update: the latest release isn't signed with Thurea's key: ignored"; return }
     $m = [Text.Encoding]::UTF8.GetString($man) | ConvertFrom-Json
+    # The version and file name go into a URL and a path: only plain ones (as on Android and Linux).
+    if ("$($m.version)" -notmatch '^[0-9]+(\.[0-9]+){1,3}$') { Log "update: the release manifest's version isn't a version number: ignored"; return }
     if ([version]$m.version -le [version]$have) { Log "update: Thurea $have is up to date"; return }
     Log "update: Thurea $($m.version) is available (installed: $have)"
     if ($CheckOnly) { return }
     $f = $m.files.windows
+    if ("$($f.name)" -notmatch '^[A-Za-z0-9_-][A-Za-z0-9._-]*$' -or "$($f.sha256)" -notmatch '^[0-9A-Fa-f]{64}$') { Log "update: the release's Windows entry isn't a plain file name and SHA-256: not installed"; return }
     $dir = Join-Path $State 'update'
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null

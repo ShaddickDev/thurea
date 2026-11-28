@@ -23,7 +23,13 @@ public class ReapplyJob extends JobService {
         // Off the main thread: Policy.apply can wait on the network (family DNS), and Android
         // treats a slow onStartJob as the app hanging. Then: newer Morphe patches out? (only notifies)
         new Thread(() -> {
-            try { MainActivity.saveStatus(this, Policy.apply(this)); Pins.checkForUpdate(this); Pins.updateMicrog(this, false); Updater.check(this); } finally { jobFinished(p, false); }
+            try {
+                // Each on its own, so one failing never stops the others (above all Thurea's own update).
+                try { MainActivity.saveStatus(this, Policy.apply(this)); } catch (Throwable ignored) {}
+                try { Pins.checkForUpdate(this); } catch (Throwable ignored) {}
+                try { Pins.updateMicrog(this, false); } catch (Throwable ignored) {}
+                try { Updater.check(this); } catch (Throwable ignored) {}
+            } finally { jobFinished(p, false); }
         }).start();
         return true;
     }

@@ -23,7 +23,13 @@ What each app gets, with no reinstall:
 | Family control centre | part of `thurea`; a control centre still open from an older version isn't reused (it closes when idle) |
 | Browser extension, Chromium family | force-installed from this computer's update server (`127.0.0.1:8137/updates.xml`), which the desktop update refreshes |
 | Browser extension, Firefox family | force-installed by policy from a versioned `install_url`, so Firefox reinstalls it after each desktop update. Firefox and Zen only accept it once it is signed by Mozilla (`AMO_JWT_*` secrets); until then only builds that allow unsigned add-ons take it |
-| Android | Thurea's background job. As device owner it installs silently; otherwise Android 12+ installs silently too (Thurea updating itself), and older Android or a phone that still asks gets a "Thurea update ready" notification to tap. An update installs over the installed Thurea (same package and signing key) and never signs accounts out; `android/phone-setup.sh` on a phone where Thurea is already device owner or device admin updates it the same way. Only first becoming device owner needs accounts signed out once |
+| Android | Thurea's background job. As device owner it installs silently; otherwise Android 12+ installs silently too (Thurea updating itself), and older Android or a phone that still asks gets a "Thurea update ready" notification to tap. An update installs over the installed Thurea (same package and signing key) and never signs accounts out; `android/phone-setup.sh` on a phone where Thurea is already device owner or device admin updates it the same way. Only first becoming device owner needs accounts signed out once. Settings → Updates shows the last check and checks at once when tapped. If a release is signed with a different Android key than the installed APK, Thurea says so there instead of failing silently; installing it once with `thurea update-phone` fixes it |
+
+To check by hand, without waiting for the hour:
+
+- Windows (as Administrator): `powershell -ExecutionPolicy Bypass -File "C:\Program Files\Thurea\Thurea.ps1" -Update` (add `-CheckOnly` to only look). The result is in Thurea's log.
+- Linux: `sudo /usr/lib/thurea/thurea-update` (or `--check`), or `journalctl -u thurea-update` for the hourly runs.
+- Android: Settings → Updates → Check for updates, or over adb `adb shell am start -n com.thurea.guard/.Remote --ez check_update true`.
 
 ## Release from GitHub (any computer)
 

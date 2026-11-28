@@ -436,6 +436,16 @@ public class PageActivity extends Activity {
             () -> open(this, STATUS)));
         col.addView(l);
 
+        // Thurea updates itself from its signed GitHub releases (Updater); this checks at once.
+        col.addView(Ui.section(this, "Updates"));
+        LinearLayout u = Ui.list(this);
+        u.addView(Ui.row(this, "⟳", "Check for updates", Updater.summary(this), () -> {
+            Updater.note(Updater.prefs(this), "Checking GitHub for a newer Thurea...");
+            render();
+            new Thread(() -> { Updater.check(getApplicationContext(), true); runOnUiThread(this::render); }).start();
+        }));
+        col.addView(u);
+
         // Same settings as Thurea's tray apps on Windows and Linux.
         col.addView(Ui.section(this, "Display"));
         android.content.SharedPreferences prefs = getSharedPreferences("prefs", MODE_PRIVATE);

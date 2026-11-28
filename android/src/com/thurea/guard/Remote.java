@@ -33,6 +33,13 @@ public class Remote extends Activity {
             // In the app's external folder, so adb can read it without root.
             Native.meshDebug(i.getBooleanExtra("mesh_debug", false), new java.io.File(getExternalFilesDir(null), "mesh.log").getPath());
         }
+        // `adb shell am start -n com.thurea.guard/.Remote --ez check_update true`: check GitHub now
+        // (the same signed-manifest checks as the hourly job); the result shows in Settings → Updates.
+        if (i.getBooleanExtra("check_update", false)) {
+            android.content.Context app = getApplicationContext();
+            new Thread(() -> Updater.check(app, true)).start();
+            note = "Checking GitHub for a newer Thurea: see Settings → Updates";
+        }
         String mode = i.getStringExtra("account_mode");
         if (mode != null) AccountHelper.start(this, mode, i.getStringExtra("email"));
         // The account helper opens Settings itself; otherwise show Thurea's screen.
