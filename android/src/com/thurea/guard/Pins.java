@@ -24,8 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.json.JSONObject;
 
 /**
  * Pinned apps: patched YouTube / YouTube Music (built on the computer by pin/thurea-pin.sh with
@@ -539,10 +538,9 @@ final class Pins {
         String tag, url;
         try {
             String body = get("https://api.github.com/repos/MorpheApp/MicroG-RE/releases/latest");
-            Matcher m = Pattern.compile("\"tag_name\"\\s*:\\s*\"v?([0-9.]+)\"").matcher(body);
-            Matcher a = Pattern.compile("\"browser_download_url\"\\s*:\\s*\"(https://github\\.com/MorpheApp/MicroG-RE/releases/download/[^\"]+\\.apk)\"").matcher(body);
-            if (!m.find() || !a.find()) return;
-            tag = m.group(1); url = a.group(1);
+            JSONObject r = new JSONObject(Native.latestRelease(body, "https://github.com/MorpheApp/MicroG-RE/releases/download/"));
+            if (!r.has("url")) return;
+            tag = r.getString("tag"); url = r.getString("url");
         } catch (Exception e) { return; }
         String have = installedVersion(c, MICROG);
         if (have == null || !newer(tag, have)) return;
@@ -670,19 +668,9 @@ final class Pins {
         sp.edit().putLong("checked", System.currentTimeMillis()).apply();
         String tag;
         try {
-            HttpURLConnection h = (HttpURLConnection) new URL("https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest").openConnection();
-            h.setConnectTimeout(15000); h.setReadTimeout(15000);
-            h.setRequestProperty("Accept", "application/vnd.github+json");
-            h.setRequestProperty("User-Agent", "Thurea");
-            try (InputStream in = h.getInputStream()) {
-                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
-                byte[] buf = new byte[8192]; int n;
-                while ((n = in.read(buf)) > 0 && bo.size() < 1 << 20) bo.write(buf, 0, n);
-                String body = bo.toString("UTF-8");
-                Matcher m = Pattern.compile("\"tag_name\"\\s*:\\s*\"v?([0-9.]+)\"").matcher(body);
-                if (!m.find()) return;
-                tag = m.group(1);
-            }
+            JSONObject r = new JSONObject(Native.latestRelease(get("https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest"), ""));
+            if (!r.has("tag")) return;
+            tag = r.getString("tag");
         } catch (Exception e) { return; }
         if (newer(tag, current) && !tag.equals(sp.getString("notified", ""))) {
             notify(c, 4, "YouTube Thurea update available",
@@ -692,16 +680,8 @@ final class Pins {
         }
     }
 
-    static boolean newer(String a, String b) {
-        String[] x = a.split("\\."), y = b.split("\\.");
-        for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            int p = i < x.length ? parse(x[i]) : 0, q = i < y.length ? parse(y[i]) : 0;
-            if (p != q) return p > q;
-        }
-        return false;
-    }
-
-    private static int parse(String s) { try { return Integer.parseInt(s); } catch (NumberFormatException e) { return 0; } }
+    /** Is version a newer than b? (Thurea's Rust core: number by number.) */
+    static boolean newer(String a, String b) { return Native.newerVersion(a, b); }
 
     static void notify(Context c, int id, String title, String text) {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
