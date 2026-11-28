@@ -233,7 +233,12 @@ cp "$B"/rpmbuild/RPMS/x86_64/thurea-"$VER"-1.x86_64.rpm "$D/thurea-linux.rpm"
 echo "== Windows"
 W=$B/windows/Thurea; mkdir -p "$W/data" "$W/web" "$W/android"
 cp -r "$R/windows/thurea/." "$W/"
-cp "$C/extension-id" "$C/firefox-id" "$C/chromium-policy.json" "$C/firefox-policies.json" "$C/release-key.json" "$W/data/"
+cp "$C/extension-id" "$C/firefox-id" "$C/release-key.json" "$W/data/"
+# Thurea for Windows never touches DNS: its Firefox policy has no DNS over HTTPS lock, and the
+# Chromium policy file (which locks the browsers' secure DNS; Thurea.ps1 writes its own policy)
+# isn't shipped at all.
+python3 -I -c 'import json, sys; p = json.load(open(sys.argv[1])); p["policies"].pop("DNSOverHTTPS", None); json.dump(p, open(sys.argv[2], "w"))' \
+  "$C/firefox-policies.json" "$W/data/firefox-policies.json"
 cp "$R/policy/verses.json" "$W/data/verses.json"
 # The Rust agent for Windows: the tray runs it for "Keep my phone" (setup without a reset).
 ( cd "$R" && PATH="$HOME/.cargo/bin:$PATH" cargo build --release -p thurea-agent --target x86_64-pc-windows-gnu ) >> "$B/rust.log" 2>&1 || { tail -20 "$B/rust.log"; echo "Windows agent build failed"; exit 1; }
@@ -252,6 +257,8 @@ cp "$C/thurea.crx" "$C/updates.xml" "$W/web/"
 cp "$C/thurea.xpi" "$W/web/$XPI_NAME"
 cp "$D/thurea-android.apk" "$W/android/Thurea.apk"
 echo "$VER" > "$W/VERSION"
+# Fails the build if anything shipped for Windows would change DNS.
+python3 -I "$R/release/check-windows-dns.py" "$W" || exit 1
 find "$W" \( -name "*.ps1" -o -name "*.cs" -o -name "*.cmd" -o -name "*.md" \) -print0 | xargs -0 sed -i "s/\r\?$/\r/"
 # Authenticode: thurea.exe, ThureaTray.exe and Thurea.ps1 (after the CRLF pass: a signed script
 # must not change afterwards). THUREA_SIGN_CMD signs one file in place, e.g. with jsign and a

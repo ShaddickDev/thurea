@@ -3,7 +3,7 @@
 #   Release:  Actions → Release → Run workflow (on master), or push a tag vX.Y.Z that matches
 #             release/VERSION. The run then waits for ShaddickDev to approve the "release"
 #             environment before it can read the signing keys.
-#   Pull requests that touch the release scripts run "Test build": the same build with
+#   Pull requests that touch the release scripts or windows/ run "Test build": the same build with
 #             throwaway keys and no secrets, and nothing is published.
 #
 # No third-party actions: every step is a script in this repository, so there is nothing to pin
@@ -23,7 +23,7 @@ on:
       - linux/stage.sh
       - linux/debian/**
       - linux/rpm/**
-      - windows/msix/**
+      - windows/**
 
 permissions:
   contents: read
