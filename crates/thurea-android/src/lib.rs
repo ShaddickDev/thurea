@@ -25,6 +25,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub mod chrome;
 pub mod releases;
 pub mod screen_time;
+pub mod twitch;
 pub mod update;
 
 pub const PLATFORM: &str = "android";
