@@ -453,7 +453,7 @@ public class PageActivity extends Activity {
         try { ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) {}
         a.addView(Ui.title(this, "Thurea " + ver, 17));
         a.addView(Ui.text(this, "Keeps this phone safe. Managed by device policy.", 14, Ui.MUTED), Ui.gapTop(this, 4));
-        a.addView(fine("Bible verses: " + Verses.NOTICE), Ui.gapTop(this, 16));
+        a.addView(fine("Bible verses: " + Verses.notice()), Ui.gapTop(this, 16));
         a.addView(fine("Pinned YouTube apps are patched with Morphe's open-source patches and sign in through MicroG-RE; pinned Twitch with ReVanced's. Thurea runs only on this phone — nothing about you is sent anywhere."), Ui.gapTop(this, 10));
         a.addView(fine(CREDITS), Ui.gapTop(this, 10));
         col.addView(a);

@@ -59,6 +59,15 @@ final class Native {
     static native String pollEvents();
     /** {"line": "...", "peers": [...], "joined": bool} */
     static native String household();
+    /** Today's verse by the local date: {"ref", "text", "translation", "notice"}. */
+    static native String verseToday(long utcOffsetSecs);
+    /**
+     * What to do with a release manifest already checked against Thurea's release key:
+     * {"action": "current"|"error", "note"} or {"action": "download", "version", "url", "sha256"}.
+     */
+    static native String updatePlan(String manifestJson, String haveVersion);
+    /** Does the file match the signed manifest's SHA-256? */
+    static native boolean apkMatches(String path, String sha256);
 
     /** Loads the policy once per process; cheap to call everywhere. */
     static synchronized JSONObject policy(Context c) {

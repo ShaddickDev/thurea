@@ -19,7 +19,6 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.KeyFactory;
-import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
@@ -48,17 +47,18 @@ final class Updater {
             byte[] man = get(BASE + "/latest/download/thurea-manifest.json", 1 << 20);
             byte[] sig = get(BASE + "/latest/download/thurea-manifest.json.sig", 4096);
             if (!verified(man, sig)) { note(p, "The latest release isn't signed with Thurea's key: ignored."); return; }
-            JSONObject m = new JSONObject(new String(man, "UTF-8"));
-            String latest = m.getString("version");
             String have = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
-            if (compare(latest, have) <= 0) { note(p, "Thurea " + have + " is up to date."); return; }
-            JSONObject f = m.getJSONObject("files").getJSONObject("android");
-            byte[] apk = get(BASE + "/download/v" + latest + "/" + f.getString("name"), 200 << 20);
-            if (!hex(MessageDigest.getInstance("SHA-256").digest(apk)).equals(f.getString("sha256"))) {
-                note(p, "The Thurea " + latest + " download doesn't match the signed checksum: not installed."); return;
-            }
+            // The version check, the download address and the checksum are Thurea's Rust core.
+            JSONObject plan = new JSONObject(Native.updatePlan(new String(man, "UTF-8"), have == null ? "0" : have));
+            if (!"download".equals(plan.getString("action"))) { note(p, plan.getString("note")); return; }
+            String latest = plan.getString("version");
+            byte[] apk = get(plan.getString("url"), 200 << 20);
             File file = new File(c.getCacheDir(), "thurea-update.apk");
             try (OutputStream o = new FileOutputStream(file)) { o.write(apk); }
+            if (!Native.apkMatches(file.getPath(), plan.getString("sha256"))) {
+                file.delete();
+                note(p, "The Thurea " + latest + " download doesn't match the signed checksum: not installed."); return;
+            }
             install(c, file);
             note(p, "Installing Thurea " + latest + "...");
         } catch (Exception e) {
@@ -105,18 +105,6 @@ final class Updater {
         return s.verify(sig);
     }
 
-    /** "1.1.0" vs "1.0.12": compares number by number. */
-    static int compare(String a, String b) {
-        String[] x = a.trim().split("\\."), y = (b == null ? "0" : b.trim()).split("\\.");
-        for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            int p = i < x.length ? num(x[i]) : 0, q = i < y.length ? num(y[i]) : 0;
-            if (p != q) return Integer.compare(p, q);
-        }
-        return 0;
-    }
-
-    private static int num(String s) { try { return Integer.parseInt(s.replaceAll("[^0-9].*$", "")); } catch (Exception e) { return 0; } }
-
     private static byte[] get(String url, int limit) throws Exception {
         for (int hop = 0; hop < 5; hop++) {   // GitHub redirects release downloads to its CDN
             HttpURLConnection h = (HttpURLConnection) new URL(url).openConnection();
@@ -134,12 +122,6 @@ final class Updater {
             }
         }
         throw new Exception(url + ": too many redirects");
-    }
-
-    private static String hex(byte[] b) {
-        StringBuilder sb = new StringBuilder();
-        for (byte x : b) sb.append(String.format("%02x", x));
-        return sb.toString();
     }
 
     private static void note(SharedPreferences p, String s) { p.edit().putString("note", s).apply(); }

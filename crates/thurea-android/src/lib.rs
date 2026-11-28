@@ -9,7 +9,7 @@
 //! parent), `asks.json` (this child's own open requests).
 
 use jni::objects::{JClass, JObjectArray, JString};
-use jni::sys::{jboolean, jstring, JNI_FALSE, JNI_TRUE};
+use jni::sys::{jboolean, jlong, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 use serde_json::{json, Value};
 use thurea_core::family::{self, ItemKind, Request, Role};
@@ -21,6 +21,8 @@ use thurea_core::{crypto, Check, Policy, Report, State};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+
+pub mod update;
 
 pub const PLATFORM: &str = "android";
 
@@ -865,6 +867,33 @@ pub extern "system" fn Java_com_thurea_guard_Native_familyRevoke<'l>(mut env: JN
     out(&mut env, r)
 }
 
+/// Today's verse by this phone's local date (`utc_offset_secs`), the same as on Windows and Linux:
+/// `{"ref","text","translation","notice"}`.
+pub fn verse_today(utc_offset_secs: i64) -> String {
+    let v = thurea_core::verses::today(utc_offset_secs);
+    let (translation, notice) = thurea_core::verses::translation();
+    json!({"ref": v.reference, "text": v.text, "translation": translation, "notice": notice}).to_string()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_verseToday<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, utc_offset_secs: jlong) -> jstring {
+    let r = verse_today(utc_offset_secs);
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_updatePlan<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, manifest: JString<'l>, have: JString<'l>) -> jstring {
+    let (m, h) = (jstr(&mut env, &manifest), jstr(&mut env, &have));
+    let r = update::plan(&m, &h).to_string();
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_apkMatches<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, path: JString<'l>, sha256: JString<'l>) -> jboolean {
+    let (p, s) = (jstr(&mut env, &path), jstr(&mut env, &sha256));
+    jbool(update::file_matches(&p, &s))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -971,5 +1000,17 @@ mod tests {
         let saved = Policy::load(&dir.join("policy.json")).unwrap();
         assert!(Policy::default().accepts(&saved).is_ok());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn verse() {
+        let v: Value = serde_json::from_str(&verse_today(0)).unwrap();
+        let day = (thurea_core::now() as i64).div_euclid(86_400);
+        assert_eq!(v["ref"], thurea_core::verses::for_day(day).reference);
+        assert_eq!(v["translation"], "WEB");
+        assert!(!v["notice"].as_str().unwrap().is_empty());
+        // A phone a day ahead of UTC gets tomorrow's verse.
+        let ahead: Value = serde_json::from_str(&verse_today(86_400)).unwrap();
+        assert_eq!(ahead["ref"], thurea_core::verses::for_day(day + 1).reference);
     }
 }
