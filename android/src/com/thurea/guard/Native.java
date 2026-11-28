@@ -79,6 +79,12 @@ final class Native {
     static native String familyDns(String planJson);
     /** Chrome's managed settings for this phone's plan, as JSON (Policy.bundle makes them a Bundle). */
     static native String chromeRestrictions(String planJson, boolean dohReachable);
+    /** Screen time: adds ms of app in front to today's tally ({"day", "ms": {app: ms}}); returns the new tally. */
+    static native String screenAdd(String stored, String day, String app, long ms);
+    /** Screen time: today's use from the tally, {app: minutes}. */
+    static native String screenMinutes(String stored, String day);
+    /** "1 h 05 min" / "45 min". */
+    static native String duration(long minutes);
 
     /** Loads the policy once per process; cheap to call everywhere. */
     static synchronized JSONObject policy(Context c) {

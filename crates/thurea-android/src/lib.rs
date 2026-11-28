@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 pub mod chrome;
 pub mod releases;
+pub mod screen_time;
 pub mod update;
 
 pub const PLATFORM: &str = "android";
@@ -430,7 +431,15 @@ pub fn android_plan(apps_json: &str, known_json: &str, clock_json: &str) -> Stri
         top.truncate(6);
         s.usage = Some(UsageReport { device: me.clone(), child: child.clone(), day: k.day.clone(), used: sum.used, allowed: sum.allowed, top, at: now });
     }
-    serde_json::to_string(&plan).unwrap()
+    // The words the child's screens show: today's screen time, and why each closed app is closed.
+    let mut out = serde_json::to_value(&plan).unwrap();
+    out["screen_line"] = json!(plan.screen.as_ref().map(screen_time::line).unwrap_or_default());
+    if let Some(list) = out["suspend"].as_array_mut() {
+        for (entry, (_, verdict)) in list.iter_mut().zip(&plan.suspend) {
+            entry[1]["reason"] = json!(screen_time::reason(verdict));
+        }
+    }
+    out.to_string()
 }
 
 // ── Offline codes ──
@@ -935,6 +944,26 @@ pub extern "system" fn Java_com_thurea_guard_Native_chromeRestrictions<'l>(mut e
     out(&mut env, r)
 }
 
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_screenAdd<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, stored: JString<'l>, day: JString<'l>, app: JString<'l>, ms: jlong) -> jstring {
+    let (s, d, a) = (jstr(&mut env, &stored), jstr(&mut env, &day), jstr(&mut env, &app));
+    let r = screen_time::add_use(&s, &d, &a, ms.max(0) as u64);
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_screenMinutes<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, stored: JString<'l>, day: JString<'l>) -> jstring {
+    let (s, d) = (jstr(&mut env, &stored), jstr(&mut env, &day));
+    let r = screen_time::minutes_today(&s, &d).to_string();
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_duration<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, minutes: jlong) -> jstring {
+    let r = screen_time::duration(minutes.max(0) as u64);
+    out(&mut env, r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1020,6 +1049,8 @@ mod tests {
         let clock = r#"{"day":"2026-11-25","minute":600,"used":{"com.whatsapp":61},"labels":{"com.whatsapp":"WhatsApp"}}"#;
         let plan: Value = serde_json::from_str(&android_plan(r#"["com.whatsapp"]"#, r#"["com.whatsapp"]"#, clock)).unwrap();
         assert_eq!(plan["suspend"][0][1]["why"], "daily_limit");
+        assert_eq!(plan["suspend"][0][1]["reason"], "Time's up for today");
+        assert_eq!(plan["screen_line"], "Time's up for today (1 h 01 min)");
         assert_eq!(plan["screen"]["left"], 0);
         let code = family_code("Sam", 30, "2026-11-25");
         assert_eq!(code.len(), 7);
