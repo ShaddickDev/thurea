@@ -68,6 +68,13 @@ final class Native {
     static native String updatePlan(String manifestJson, String haveVersion);
     /** Does the file match the signed manifest's SHA-256? */
     static native boolean apkMatches(String path, String sha256);
+    /**
+     * A GitHub "latest release" answer: {"tag"} (no leading "v"), plus {"url"}, the first .apk asset
+     * under assetPrefix when one is given; {} if it isn't a release with a plain version number.
+     */
+    static native String latestRelease(String body, String assetPrefix);
+    /** Is version a newer than b? Number by number ("1.0.10" is newer than "1.0.9"). */
+    static native boolean newerVersion(String a, String b);
 
     /** Loads the policy once per process; cheap to call everywhere. */
     static synchronized JSONObject policy(Context c) {

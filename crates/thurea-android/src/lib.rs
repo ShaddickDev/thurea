@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
+pub mod releases;
 pub mod update;
 
 pub const PLATFORM: &str = "android";
@@ -892,6 +893,19 @@ pub extern "system" fn Java_com_thurea_guard_Native_updatePlan<'l>(mut env: JNIE
 pub extern "system" fn Java_com_thurea_guard_Native_apkMatches<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, path: JString<'l>, sha256: JString<'l>) -> jboolean {
     let (p, s) = (jstr(&mut env, &path), jstr(&mut env, &sha256));
     jbool(update::file_matches(&p, &s))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_latestRelease<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, body: JString<'l>, asset_prefix: JString<'l>) -> jstring {
+    let (b, a) = (jstr(&mut env, &body), jstr(&mut env, &asset_prefix));
+    let r = releases::latest(&b, &a).to_string();
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_newerVersion<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, a: JString<'l>, b: JString<'l>) -> jboolean {
+    let (x, y) = (jstr(&mut env, &a), jstr(&mut env, &b));
+    jbool(releases::newer(&x, &y))
 }
 
 #[cfg(test)]
