@@ -12,6 +12,8 @@ Each release's section below is used as its GitHub release notes (`release/publi
 - Chrome's managed settings (secure DNS, safe sites, SafeSearch, YouTube Restricted, no incognito,
   the blocklist) and the choice of family DNS now come from the Rust core. A child's plan with no
   DNS host now uses the household's instead of locking Private DNS to nothing.
+- Today's screen time tally and what a child's screens say ("Today: 30 min · 30 min left", "Time's
+  up for Games") now come from the Rust core. Today's count carries over the update.
 
 ## 1.0.7
 
