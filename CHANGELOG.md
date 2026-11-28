@@ -2,6 +2,15 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## 1.0.7
+
+### Windows
+- The Windows download no longer carries any DNS setting: the Chromium policy file that locked
+  the browsers' secure DNS to family DNS is gone, and the Firefox policy has no DNS over HTTPS lock.
+  1.0.6 didn't apply them, and now they can't come back.
+- Every release build now fails if anything shipped for Windows would change DNS (adapter DNS
+  servers, Windows DNS over HTTPS, DNS rules, DNS firewall rules or browser secure-DNS policies).
+
 ## 1.0.6
 
 ### Android
