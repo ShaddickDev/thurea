@@ -101,6 +101,42 @@ pub fn verify_patches(rvp: &str, sig: &str, keys_body: &str) -> Result<(), Strin
     verify_with(&current_key(keys_body), &data, &sig)
 }
 
+/// Where ReVanced Manager's releases download from. Thurea never installs Manager: it runs the
+/// patcher that Manager carries (the patcher has no release of its own any more).
+pub const MANAGER_DOWNLOADS: &str = "https://github.com/ReVanced/revanced-manager/releases/download/";
+
+/// SHA-256 of ReVanced Manager's APK signing certificate (O=ReVanced, CN=ReVanced Manager,
+/// self-signed, valid 2022-2050), as read from Manager 2.6.0.
+pub const MANAGER_CERTS: &[&str] = &["b6362c6ea7888efd15c0800f480786ad0f5b133b4f84e12d46afba5f9eac1223"];
+
+/// `{"tag", "apk", "asc"}` from ReVanced's `/v5/manager` answer: only Manager's own GitHub
+/// release file (`revanced-manager-<tag>.apk`) and its ReVanced signature (`.apk.asc`). `{}` else.
+pub fn manager_release(body: &str) -> Value {
+    let Ok(r) = serde_json::from_str::<Value>(body) else { return json!({}) };
+    let Some(tag) = r["version"].as_str() else { return json!({}) };
+    let tag = tag.strip_prefix('v').unwrap_or(tag);
+    if !plain(tag) {
+        return json!({});
+    }
+    let apk = format!("{MANAGER_DOWNLOADS}v{tag}/revanced-manager-{tag}.apk");
+    if r["download_url"].as_str() != Some(apk.as_str()) {
+        return json!({});
+    }
+    json!({"tag": tag, "apk": apk, "asc": format!("{apk}.asc")})
+}
+
+/// Is a file signed by ReVanced (patches or Manager)? `sig`: the detached signature file;
+/// `keys_body`: the `/v5/patches/keys` answer ("" if it couldn't be fetched).
+pub fn verify_revanced(file: &str, sig: &str, keys_body: &str) -> Result<(), String> {
+    verify_patches(file, sig, keys_body)
+}
+
+/// Is an APK signed by ReVanced Manager's key? `certs_json` as for [`genuine_twitch`].
+pub fn genuine_manager(certs_json: &str) -> bool {
+    let certs: Vec<String> = serde_json::from_str(certs_json).unwrap_or_default();
+    cert_in(&certs, MANAGER_CERTS)
+}
+
 /// Is one of `certs` (SHA-256 hex of an APK's signing certificates) one of `pinned`?
 pub fn cert_in(certs: &[String], pinned: &[&str]) -> bool {
     certs.iter().any(|c| pinned.iter().any(|p| c.trim().eq_ignore_ascii_case(p)))
@@ -229,6 +265,24 @@ mod tests {
         bad.as_object_mut().unwrap().remove("signature_download_url");
         assert_eq!(patches_release(&bad.to_string()), json!({}));
         assert_eq!(patches_release("not json"), json!({}));
+    }
+
+    #[test]
+    fn manager_releases() {
+        let good = json!({"version": "v2.6.0", "created_at": "2026-04-26T13:06:02",
+            "download_url": "https://github.com/ReVanced/revanced-manager/releases/download/v2.6.0/revanced-manager-2.6.0.apk"});
+        assert_eq!(manager_release(&good.to_string()), json!({"tag": "2.6.0",
+            "apk": "https://github.com/ReVanced/revanced-manager/releases/download/v2.6.0/revanced-manager-2.6.0.apk",
+            "asc": "https://github.com/ReVanced/revanced-manager/releases/download/v2.6.0/revanced-manager-2.6.0.apk.asc"}));
+        let mut bad = good.clone();
+        bad["download_url"] = json!("https://example.com/revanced-manager-2.6.0.apk");
+        assert_eq!(manager_release(&bad.to_string()), json!({}));
+        let mut bad = good.clone();
+        bad["version"] = json!("v2.7.0");
+        assert_eq!(manager_release(&bad.to_string()), json!({}));
+        assert_eq!(manager_release("{}"), json!({}));
+        assert!(genuine_manager(&json!([MANAGER_CERTS[0]]).to_string()));
+        assert!(!genuine_manager(&json!([TWITCH_CERTS[0]]).to_string()));
     }
 
     #[test]

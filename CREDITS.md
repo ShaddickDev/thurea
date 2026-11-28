@@ -21,6 +21,9 @@ own releases and never bundled into Thurea.
 | Copy URL / Download Video ideas | `extension/omarchy.js` | Omarchy (37signals), <https://github.com/basecamp/omarchy> | MIT |
 | QR code encoder | `crates/thurea-core/src/qr.rs`, `windows/thurea/tray/ThureaTray.cs`, Omarchy plugin | Thurea's own code, following the method of Project Nayuki's *QR Code generator* (<https://www.nayuki.io/page/qr-code-generator-library>, MIT) | MIT |
 | Rust crates: serde, serde_json, sha2, hmac, getrandom, jni, ksni, ed25519-dalek, chacha20poly1305 (RustCrypto / dalek-cryptography) | `crates/` | their authors on crates.io | MIT or Apache-2.0 (ksni: Unlicense) |
+| rpgp (`pgp` crate: checks ReVanced's signatures) | `crates/thurea-android` | the rpgp authors, <https://github.com/rpgp/rpgp> | MIT or Apache-2.0 |
+| ARSCLib (merges Twitch's split APKs before patching) | Android app (`android/deps.sh`) | REAndroid, <https://github.com/REAndroid/ARSCLib> | Apache-2.0 |
+| aapt2 (rebuilds resources while patching) | Android app, `lib/*/libaapt2.so` (`android/deps.sh`, taken from ReVanced Manager's release APK) | The Android Open Source Project, built for Android by ReVanced | Apache-2.0 |
 
 ## Services Thurea talks to (not shipped)
 
@@ -37,7 +40,8 @@ own releases and never bundled into Thurea.
 |---|---|---|---|
 | Morphe patches | ad-free pinned YouTube / YouTube Music on Android | MorpheApp, <https://github.com/MorpheApp/morphe-patches> | GPL-3.0 |
 | MicroG-RE | Google sign-in for the patched apps | MorpheApp, <https://github.com/MorpheApp/MicroG-RE> | Apache-2.0 |
-| ReVanced patches | pinned Twitch on Android | ReVanced, <https://github.com/ReVanced/revanced-patches> | GPL-3.0 |
+| ReVanced patches | pinned Twitch on Android, patched on the phone (from <https://api.revanced.app>, signature checked) | ReVanced, <https://gitlab.com/ReVanced/revanced-patches> | GPL-3.0 |
+| ReVanced Patcher and Library (inside ReVanced Manager's release APK; loaded, never installed) | patching Twitch on the phone | ReVanced, <https://github.com/ReVanced/revanced-manager> | GPL-3.0 |
 | Helium browser | default browser on the Thurea Windows 11 ISO | imput, <https://github.com/imputnet/helium> | GPL-3.0 |
 | adb (Android platform tools) | "Keep my phone": setting up a phone without a reset, over Wireless debugging or USB | The Android Open Source Project, <https://android.googlesource.com/platform/packages/modules/adb/> (Linux: the `android-tools` package, built from source) | Apache-2.0 |
 | yt-dlp | optional video downloads (desktop) | yt-dlp contributors, <https://github.com/yt-dlp/yt-dlp> | Unlicense |
