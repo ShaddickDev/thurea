@@ -55,15 +55,10 @@ final class ScreenTime {
         long now = SystemClock.elapsedRealtime();
         boolean on = c.getSystemService(PowerManager.class).isInteractive();
         if (since > 0 && on && !front.isEmpty()) {
-            long ms = Math.min(now - since, 120_000);       // a missed tick never counts more than 2 minutes
-            try {
-                SharedPreferences sp = prefs(c);
-                JSONObject u = new JSONObject(sp.getString("used", "{}"));
-                if (!today().equals(u.optString("day"))) u = new JSONObject().put("day", today()).put("ms", new JSONObject());
-                JSONObject m = u.getJSONObject("ms");
-                m.put(front, m.optLong(front) + ms);
-                sp.edit().putString("used", u.toString()).apply();
-            } catch (Exception ignored) {}
+            // Today's tally is kept by the Rust core (a new day starts afresh; a missed tick
+            // never counts more than 2 minutes).
+            SharedPreferences sp = prefs(c);
+            sp.edit().putString("used", Native.screenAdd(sp.getString("used", ""), today(), front, now - since)).apply();
         }
         since = now;
     }
@@ -73,25 +68,18 @@ final class ScreenTime {
         account(c);
         try {
             JSONObject out = new JSONObject().put("day", today()).put("minute", minuteOfDay());
-            JSONObject used = new JSONObject(), labels = new JSONObject();
-            JSONObject u = new JSONObject(prefs(c).getString("used", "{}"));
-            if (today().equals(u.optString("day"))) {
-                JSONObject m = u.getJSONObject("ms");
-                PackageManager pm = c.getPackageManager();
-                for (Iterator<String> it = m.keys(); it.hasNext(); ) {
-                    String p = it.next();
-                    used.put(p, m.optLong(p) / 60_000);
-                    try { labels.put(p, pm.getApplicationLabel(pm.getApplicationInfo(p, 0)).toString()); } catch (Exception e) { labels.put(p, p); }
-                }
+            JSONObject used = new JSONObject(Native.screenMinutes(prefs(c).getString("used", ""), today())), labels = new JSONObject();
+            PackageManager pm = c.getPackageManager();
+            for (Iterator<String> it = used.keys(); it.hasNext(); ) {
+                String p = it.next();
+                try { labels.put(p, pm.getApplicationLabel(pm.getApplicationInfo(p, 0)).toString()); } catch (Exception e) { labels.put(p, p); }
             }
             return out.put("used", used).put("labels", labels).toString();
         } catch (Exception e) { return ""; }
     }
 
     /** "1 h 05 min" / "45 min". */
-    static String duration(long minutes) {
-        return minutes >= 60 ? (minutes / 60) + " h " + String.format("%02d", minutes % 60) + " min" : minutes + " min";
-    }
+    static String duration(long minutes) { return Native.duration(minutes); }
 
     static String hhmm(int minute) { return String.format("%02d:%02d", minute / 60, minute % 60); }
 }

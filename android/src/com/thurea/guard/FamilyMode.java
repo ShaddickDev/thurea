@@ -223,27 +223,8 @@ final class FamilyMode {
         applyLock(c, dpm, a, plan);
     }
 
-    /** A line about today's screen time for the child's screens and the status page. */
-    static String screenLine(JSONObject plan) {
-        JSONObject sc = plan.optJSONObject("screen");
-        if (sc == null) return "";
-        if (sc.optBoolean("paused")) return "Paused by a parent";
-        if (sc.optBoolean("bedtime")) return "Bedtime — only always-allowed apps";
-        long used = sc.optLong("used");
-        if (sc.isNull("allowed") || !sc.has("allowed")) return used > 0 ? "Today: " + ScreenTime.duration(used) : "";
-        long left = sc.optLong("left");
-        return left == 0 ? "Time's up for today (" + ScreenTime.duration(used) + ")" : "Today: " + ScreenTime.duration(used) + " · " + ScreenTime.duration(left) + " left";
-    }
-
-    static String screenWhy(JSONObject v) {
-        switch (v == null ? "" : v.optString("why")) {
-            case "bedtime": return "Bedtime";
-            case "paused": return "Paused by a parent";
-            case "daily_limit": return "Time's up for today";
-            case "limit": return "Time's up for " + v.optString("what");
-            default: return "Closed";
-        }
-    }
+    /** A line about today's screen time for the child's screens and the status page (from the Rust core). */
+    static String screenLine(JSONObject plan) { return plan.optString("screen_line"); }
 
     /** Apps Thurea froze on this child's phone, with a label and why. */
     static List<String[]> frozenApps(Context c) {
@@ -261,7 +242,7 @@ final class FamilyMode {
             String label = pkg;
             try { label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString(); } catch (Exception ignored) {}
             String verdict = v == null ? "" : v.optString("verdict");
-            String why = "held".equals(verdict) ? "New app" : "blocked".equals(verdict) ? "Social media" : screenWhy(v);
+            String why = v == null ? "Closed" : v.optString("reason", "Closed");
             out.add(new String[]{ pkg, label, why, verdict });
         }
         return out;
