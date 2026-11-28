@@ -183,7 +183,7 @@ cp "$R/android/Thurea.apk" "$D/thurea-android.apk"
 echo "== Linux"
 # Thurea's Rust agent (phone setup by QR, verse of the day, status) and the non-Omarchy tray.
 ( cd "$R" && cargo build --release -p thurea-agent -p thurea-tray ) > "$B/rust.log" 2>&1 || { tail -20 "$B/rust.log"; echo "Rust build failed"; exit 1; }
-( cd "$R" && cargo test --release -p thurea-core -p thurea-agent -p thurea-tray ) >> "$B/rust.log" 2>&1 || { tail -30 "$B/rust.log"; echo "Rust tests failed"; exit 1; }
+( cd "$R" && cargo test --release -p thurea-core -p thurea-agent -p thurea-tray -p thurea-android ) >> "$B/rust.log" 2>&1 || { tail -30 "$B/rust.log"; echo "Rust tests failed"; exit 1; }
 cp "$R/target/release/thurea" "$R/target/release/thurea-tray" "$C/"
 cp "$D/thurea-android.apk" "$C/Thurea.apk"
 rm -rf "$B/linux"; cp -r "$R/linux" "$B/linux"

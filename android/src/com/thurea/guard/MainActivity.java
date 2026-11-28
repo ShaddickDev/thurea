@@ -181,7 +181,7 @@ public class MainActivity extends Activity {
         t.setTypeface(Typeface.SERIF, Typeface.ITALIC);
         t.setLineSpacing(0, 1.3f);
         c.addView(t, Ui.gapTop(this, 10));
-        TextView r = Ui.text(this, v[0] + " · " + Verses.TRANSLATION, 13, Ui.MUTED);
+        TextView r = Ui.text(this, v[0] + " · " + v[2], 13, Ui.MUTED);
         r.setGravity(Gravity.END);
         c.addView(r, Ui.gapTop(this, 10));
         return c;
