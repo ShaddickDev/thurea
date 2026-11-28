@@ -33,7 +33,8 @@ for abi in arm64-v8a armeabi-v7a x86_64; do cp "$DEPS/aapt2/$abi/libaapt2.so" "$
 javac -source 17 -target 17 -Xlint:-options -classpath "$JAR:$DEPS/arsclib.jar" -d "$B/classes" $(find "$A/src" "$B/gen" -name '*.java')
 "$BT/d8" --release --min-api 29 --lib "$JAR" --output "$B/dex" $(find "$B/classes" -name '*.class') "$DEPS/arsclib.jar"
 (cd "$B/dex" && zip -qj "$B/unsigned.apk" classes*.dex)
-(cd "$B/apk" && zip -qr0 "$B/unsigned.apk" lib)
+# Compressed: Android extracts native code at install (extractNativeLibs), and aapt2 is large.
+(cd "$B/apk" && zip -qr9 "$B/unsigned.apk" lib)
 "$BT/zipalign" -f -P 16 4 "$B/unsigned.apk" "$B/aligned.apk"
 
 # 3. Sign with Thurea's release key (every update must use the same key).
