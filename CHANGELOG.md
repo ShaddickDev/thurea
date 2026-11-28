@@ -2,6 +2,17 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## 1.0.8
+
+### Android
+- The update check and the verse of the day now run in Thurea's Rust core, shared with Windows and
+  Linux. A signed update whose version or file name isn't plain is refused.
+- MicroG-RE and Morphe release info is read with a proper JSON parser instead of regular
+  expressions, and only accepts a plain version and an `.apk` from MicroG-RE's own GitHub address.
+- Chrome's managed settings (secure DNS, safe sites, SafeSearch, YouTube Restricted, no incognito,
+  the blocklist) and the choice of family DNS now come from the Rust core. A child's plan with no
+  DNS host now uses the household's instead of locking Private DNS to nothing.
+
 ## 1.0.7
 
 ### Windows

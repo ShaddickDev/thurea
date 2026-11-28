@@ -1,7 +1,7 @@
 # Thurea for Linux (Arch / Omarchy). Built by release/build.sh, which supplies the shared data
 # (extension, block lists, policies, release key) in $THUREA_DATA.
 pkgname=thurea
-pkgver=1.0.7
+pkgver=1.0.8
 pkgrel=1
 pkgdesc="Thurea: harmful-site and ad blocker managed by the system (hosts block, family DNS, browser policies, force-installed Thurea extension), self-updating from signed GitHub releases"
 arch=(x86_64)
