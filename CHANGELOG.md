@@ -2,6 +2,17 @@
 
 Each release's section below is used as its GitHub release notes (`release/publish.sh`).
 
+## 1.0.9
+
+### Updates (every platform)
+- Android: Thurea's own update check always runs, even if another background check fails, and a
+  check made while offline is tried again within 15 minutes instead of an hour later.
+- Android: Settings → Updates shows the last update check and checks at once when tapped.
+- Android: a release signed with a different Android key is reported plainly instead of failing
+  silently. The APK is downloaded straight to a file, and only over HTTPS.
+- Windows and Linux: a signed release whose version or file name isn't plain is refused, as on
+  Android. Fedora installs the checksum-verified package without asking for a GPG signature.
+
 ## 1.0.8
 
 ### Android
