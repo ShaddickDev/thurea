@@ -32,6 +32,6 @@ public class PinReceiver extends BroadcastReceiver {
         else if ("cleared".equals(op)) Pins.cleared(c, item, ok, msg);
         else if ("app".equals(op)) Apps.done(c, item, ok, msg);
         else if ("self".equals(op) && !ok)   // on success Android restarts Thurea (MY_PACKAGE_REPLACED)
-            c.getSharedPreferences("update", Context.MODE_PRIVATE).edit().putString("note", "Update not installed: " + msg).apply();
+            Updater.note(Updater.prefs(c), "Update not installed: " + msg);
     }
 }

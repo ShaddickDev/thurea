@@ -9,7 +9,7 @@ package manager installs it (pacman on Arch, apt on Debian / Ubuntu, dnf on Fedo
   thurea-update          check and update (run hourly by thurea-update.timer)
   thurea-update --check  only say whether an update is available
 """
-import hashlib, json, os, shutil, subprocess, sys, tempfile, urllib.request
+import hashlib, json, os, re, shutil, subprocess, sys, tempfile, urllib.request
 
 REPO = "ShaddickDev/thurea"
 BASE = os.environ.get("THUREA_UPDATE_BASE") or f"https://github.com/{REPO}/releases"
@@ -33,8 +33,14 @@ def package_manager():
     if shutil.which("apt-get") and shutil.which("dpkg"):
         return "linux-deb", lambda f: ["apt-get", "install", "-y", "--allow-downgrades", f]
     if shutil.which("dnf"):
-        return "linux-rpm", lambda f: ["dnf", "install", "-y", f]
+        # The package isn't GPG-signed; it is trusted because it matches the signed manifest's
+        # SHA-256 (checked above), and newer dnf would otherwise refuse an unsigned local package.
+        return "linux-rpm", lambda f: ["dnf", "install", "-y", "--nogpgcheck", f]
     return None, None
+
+
+PLAIN_VERSION = re.compile(r"[0-9]+(\.[0-9]+)*")
+PLAIN_NAME = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9._-]*")
 
 
 def version(s):
@@ -56,6 +62,10 @@ def main():
             print("The latest release isn't signed with Thurea's key: ignored.")
             return 1
         m = json.loads(manifest)
+        # The version and file name go into a URL and a path: only plain ones (as on Android).
+        if not isinstance(m.get("version"), str) or not PLAIN_VERSION.fullmatch(m["version"]):
+            print("The release manifest's version isn't a version number: ignored.")
+            return 1
         if version(m["version"]) <= version(have):
             print(f"Thurea {have} is up to date.")
             return 0
@@ -67,8 +77,11 @@ def main():
             print("No Thurea package for this distribution's package manager in the release.")
             return 1
         f = m["files"][key]
+        if not PLAIN_NAME.fullmatch(str(f.get("name", ""))) or not re.fullmatch(r"[0-9a-fA-F]{64}", str(f.get("sha256", ""))):
+            print("The release's package entry isn't a plain file name and SHA-256: not installed.")
+            return 1
         data = get(f"{BASE}/download/v{m['version']}/{f['name']}")
-        if hashlib.sha256(data).hexdigest() != f["sha256"]:
+        if hashlib.sha256(data).hexdigest() != f["sha256"].lower():
             print("The download doesn't match the signed checksum: not installed.")
             return 1
         pkg = f"{tmp}/{f['name']}"
