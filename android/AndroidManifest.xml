@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.thurea.guard" android:versionCode="10006" android:versionName="1.0.6">
+    package="com.thurea.guard" android:versionCode="10007" android:versionName="1.0.7">
   <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35"/>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
   <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
