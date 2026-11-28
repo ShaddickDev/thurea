@@ -245,7 +245,7 @@ impl Policy {
     }
 
     pub fn doh_template(&self) -> String {
-        format!("https://{}/dns-query", self.family_dns.host)
+        doh_template(&self.family_dns.host)
     }
 
     pub fn ipv4_servers(&self) -> Vec<&str> {
@@ -323,9 +323,25 @@ impl Policy {
     }
 }
 
+/// The DNS-over-HTTPS address for a family DNS, from its DNS-over-TLS host name. CleanBrowsing
+/// serves DoH on one host with a path per filter, not on its DoT host names.
+pub fn doh_template(host: &str) -> String {
+    match host.strip_suffix("-dns.cleanbrowsing.org") {
+        Some(filter) if !filter.is_empty() => format!("https://doh.cleanbrowsing.org/doh/{filter}/"),
+        _ => format!("https://{host}/dns-query"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn doh_templates() {
+        assert_eq!(doh_template("family.cloudflare-dns.com"), "https://family.cloudflare-dns.com/dns-query");
+        assert_eq!(doh_template("family-filter-dns.cleanbrowsing.org"), "https://doh.cleanbrowsing.org/doh/family-filter/");
+        assert_eq!(doh_template(crate::family::CHILD_DNS_HOST), "https://doh.cleanbrowsing.org/doh/family-filter/");
+    }
 
     #[test]
     fn default_policy_is_valid_and_matches_android_list() {

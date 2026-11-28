@@ -83,14 +83,6 @@ final class FamilyMode {
 
     static boolean isChild(JSONObject plan) { return "child".equals(plan.optString("role")); }
 
-    /** Extra sites for Chrome's blocklist. */
-    static List<String> blockedSites(JSONObject plan) {
-        List<String> l = new ArrayList<>();
-        JSONArray a = plan.optJSONArray("blocked_sites");
-        for (int i = 0; a != null && i < a.length(); i++) l.add(a.optString(i));
-        return l;
-    }
-
     /** Carries out the plan; returns status lines. */
     static String enforce(Context c, DevicePolicyManager dpm, ComponentName a, JSONObject plan) {
         SharedPreferences sp = prefs(c);

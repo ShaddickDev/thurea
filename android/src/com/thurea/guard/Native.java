@@ -75,6 +75,10 @@ final class Native {
     static native String latestRelease(String body, String assetPrefix);
     /** Is version a newer than b? Number by number ("1.0.10" is newer than "1.0.9"). */
     static native boolean newerVersion(String a, String b);
+    /** For this phone's plan (androidPlan's JSON): {"host", "doh_host"}, its family DNS and DoH server. */
+    static native String familyDns(String planJson);
+    /** Chrome's managed settings for this phone's plan, as JSON (Policy.bundle makes them a Bundle). */
+    static native String chromeRestrictions(String planJson, boolean dohReachable);
 
     /** Loads the policy once per process; cheap to call everywhere. */
     static synchronized JSONObject policy(Context c) {
@@ -96,15 +100,6 @@ final class Native {
         for (int i = 0; a != null && i < a.length(); i++) out.add(a.optString(i));
         return out;
     }
-
-    static String[] blocklist(Context c) {
-        JSONArray a = policy(c).optJSONArray("blocklist");
-        String[] out = new String[a == null ? 0 : a.length()];
-        for (int i = 0; i < out.length; i++) out[i] = a.optString(i);
-        return out;
-    }
-
-    static String familyHost(Context c) { return policy(c).optJSONObject("family_dns").optString("host"); }
 
     static String[] familyServers(Context c) {
         JSONArray a = policy(c).optJSONObject("family_dns").optJSONArray("servers");

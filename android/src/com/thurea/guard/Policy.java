@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Iterator;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.Set;
 
@@ -33,14 +35,27 @@ final class Policy {
 
     static ComponentName admin(Context c) { return new ComponentName(c, AdminReceiver.class); }
 
-    /** Chrome's DNS-over-HTTPS address for a family DNS (its DNS-over-TLS host name). */
-    static String dohTemplate(String host) {
-        // CleanBrowsing serves DoH on one host with a path per filter, not on its DoT host names.
-        if (host.endsWith("-dns.cleanbrowsing.org")) return "https://doh.cleanbrowsing.org/doh/" + host.substring(0, host.length() - "-dns.cleanbrowsing.org".length()) + "/";
-        return "https://" + host + "/dns-query";
+    private static JSONObject json(String s) {
+        try { return new JSONObject(s); } catch (Exception e) { return new JSONObject(); }
     }
 
-    private static String dohHost(String host) { return Uri.parse(dohTemplate(host)).getHost(); }
+    /** Managed settings as Android wants them: switches, numbers, lists of text and text. */
+    static Bundle bundle(JSONObject o) {
+        Bundle b = new Bundle();
+        for (Iterator<String> it = o.keys(); it.hasNext();) {
+            String k = it.next();
+            Object v = o.opt(k);
+            if (v instanceof Boolean) b.putBoolean(k, (Boolean) v);
+            else if (v instanceof Integer) b.putInt(k, (Integer) v);
+            else if (v instanceof JSONArray) {
+                JSONArray a = (JSONArray) v;
+                String[] l = new String[a.length()];
+                for (int i = 0; i < l.length; i++) l[i] = a.optString(i);
+                b.putStringArray(k, l);
+            } else if (v != null && v != JSONObject.NULL) b.putString(k, v.toString());
+        }
+        return b;
+    }
 
     /** Does this network let us connect to host:port (within a few seconds)? Off the main thread. */
     static boolean reachable(String host, int port) {
@@ -69,7 +84,10 @@ final class Policy {
         // Families, or for a child CleanBrowsing's Family filter (it also forces YouTube
         // Restricted Mode in every app). Android looks the host up over the network here, which
         // it forbids on the main thread.
-        final String familyDns = child ? plan.optString("dns_host", Native.familyHost(c)) : Native.familyHost(c);
+        // The host (and its DNS-over-HTTPS server) come from Thurea's Rust core.
+        Native.policy(c);
+        JSONObject target = json(Native.familyDns(plan.toString()));
+        final String familyDns = target.optString("host"), familyDoh = target.optString("doh_host");
         // Some networks can't reach it (a router, ISP or hotspot that blocks DNS over TLS, port 853,
         // or intercepts 1.1.1.x). Locking Private DNS there leaves the whole phone, Chrome included,
         // with no internet at all, so it's locked only where it works; elsewhere Android uses
@@ -78,7 +96,7 @@ final class Policy {
         final boolean[] doh = { false };
         Thread t = new Thread(() -> {
             try {
-                doh[0] = reachable(dohHost(familyDns), 443);
+                doh[0] = reachable(familyDoh, 443);
                 if (!reachable(familyDns, 853)) {
                     if (dpm.getGlobalPrivateDnsMode(a) != DevicePolicyManager.PRIVATE_DNS_MODE_OPPORTUNISTIC) dpm.setGlobalPrivateDnsModeOpportunistic(a);
                     dns[0] = "! Family DNS can't be reached on this network: using the network's own DNS until it can\n";
@@ -103,19 +121,11 @@ final class Policy {
         try { dpm.addUserRestriction(a, UserManager.DISALLOW_ADD_USER); } catch (Exception ignored) {}
         r.append(installers(c, dpm, a));
 
-        // 3. Chrome: managed settings (work even with ProtonVPN on — DNS is filtered inside Chrome).
-        Bundle chrome = new Bundle();
-        // "secure" never falls back, so it's used only when the family DoH server answers on this
-        // network; otherwise "automatic", or Chrome couldn't open any page at all.
-        chrome.putString("DnsOverHttpsMode", doh[0] ? "secure" : "automatic");
-        chrome.putString("DnsOverHttpsTemplates", dohTemplate(familyDns));
-        chrome.putInt("SafeSitesFilterBehavior", 1);          // Google's safe-sites filter
-        chrome.putBoolean("ForceGoogleSafeSearch", true);
-        chrome.putInt("ForceYouTubeRestrict", child ? plan.optInt("youtube_restrict", 2) : 1);
-        chrome.putInt("IncognitoModeAvailability", 1);
-        List<String> urls = new ArrayList<>(java.util.Arrays.asList(Native.blocklist(c)));
-        urls.addAll(FamilyMode.blockedSites(plan));
-        chrome.putStringArray("URLBlocklist", urls.toArray(new String[0]));
+        // 3. Chrome: managed settings (work even with ProtonVPN on — DNS is filtered inside Chrome),
+        // from Thurea's Rust core: family DNS over HTTPS ("secure" only when the family DoH server
+        // answers on this network, or Chrome couldn't open any page at all), Google's safe-sites
+        // filter, SafeSearch, YouTube Restricted, no incognito, and the blocklist.
+        Bundle chrome = bundle(json(Native.chromeRestrictions(plan.toString(), doh[0])));
         dpm.setApplicationRestrictions(a, CHROME, chrome);
         try { dpm.setUninstallBlocked(a, CHROME, true); } catch (Exception ignored) {}
         r.append("✓ Chrome locked: family DNS, safe-sites filter, SafeSearch, YouTube Restricted").append(child ? " (strict)" : "").append(", no incognito, ")

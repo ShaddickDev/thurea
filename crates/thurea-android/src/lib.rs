@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
+pub mod chrome;
 pub mod releases;
 pub mod update;
 
@@ -908,6 +909,32 @@ pub extern "system" fn Java_com_thurea_guard_Native_newerVersion<'l>(mut env: JN
     jbool(releases::newer(&x, &y))
 }
 
+/// `{"host", "doh_host"}` for this phone's plan (`android_plan`'s JSON): see `chrome::dns`.
+pub fn family_dns(plan_json: &str) -> String {
+    let plan: Value = serde_json::from_str(plan_json).unwrap_or_default();
+    chrome::dns(&lock().policy, &plan).to_string()
+}
+
+/// Chrome's managed settings for this phone's plan: see `chrome::restrictions`.
+pub fn chrome_restrictions(plan_json: &str, doh_reachable: bool) -> String {
+    let plan: Value = serde_json::from_str(plan_json).unwrap_or_default();
+    chrome::restrictions(&lock().policy, &plan, doh_reachable).to_string()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_familyDns<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, plan: JString<'l>) -> jstring {
+    let p = jstr(&mut env, &plan);
+    let r = family_dns(&p);
+    out(&mut env, r)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_thurea_guard_Native_chromeRestrictions<'l>(mut env: JNIEnv<'l>, _: JClass<'l>, plan: JString<'l>, doh_reachable: jboolean) -> jstring {
+    let p = jstr(&mut env, &plan);
+    let r = chrome_restrictions(&p, doh_reachable != JNI_FALSE);
+    out(&mut env, r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -952,6 +979,11 @@ mod tests {
         assert_eq!(plan["role"], "child");
         assert_eq!(plan["suspend"][0][0], "com.snapchat.android");
         assert_eq!(plan["dns_host"], thurea_core::family::CHILD_DNS_HOST);
+        let d: Value = serde_json::from_str(&family_dns(&plan.to_string())).unwrap();
+        assert_eq!(d["doh_host"], "doh.cleanbrowsing.org");
+        let chrome: Value = serde_json::from_str(&chrome_restrictions(&plan.to_string(), true)).unwrap();
+        assert_eq!(chrome["DnsOverHttpsMode"], "secure");
+        assert!(chrome["URLBlocklist"].as_array().unwrap().iter().any(|s| s == "pornhub.com"));
 
         // The child asks; the request goes out with heartbeats; a parent's inbox gets it.
         assert!(ask("app", "com.snapchat.android", "Snapchat").starts_with('✓'));
